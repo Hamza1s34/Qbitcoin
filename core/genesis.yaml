@@ -1,0 +1,27 @@
+# Genesis block configuration for Qbitcoin
+# This file defines the initial allocation of coins in the genesis block
+
+# Genesis block timestamp
+#timestamp: 1714435200  # April 30, 2025 00:00:00 UTC
+
+# Genesis block message
+message: "Qbitcoin: A Quantum-Resistant Cryptocurrency - April 30, 2025"
+
+# Initial allocations (total: 20,000,000 QBIT)
+allocations:
+  # Developer allocation (5,000,000 QBIT)
+  "QjMdBkeNTWHYGFR492FiFpiDXG7D8SBJNv": 5000000
+
+  # Public and ICO allocation (8,000,000 QBIT)
+  "QBT1PublicOfferingICOMainAddr46hKpP8L": 8000000
+
+  # Marketing and Airdrop allocation (2,000,000 QBIT)
+  "QBT1MarketingAirdropMain6Zd3pN7wQaJt": 2000000
+
+  # Project Development allocation (3,000,000 QBIT)
+  "QBT1ProjectDevFundMainAddressYM58RjTX": 3000000
+
+  # Reserve allocation (2,000,000 QBIT)
+  "QBT1ReserveFundMainColdStorageKL9mnPu": 2000000
+
+ 
