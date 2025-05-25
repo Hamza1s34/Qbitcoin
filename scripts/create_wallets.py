@@ -19,7 +19,7 @@ if str(current_dir) not in sys.path:
 
 # Import required modules
 from utils.wallet_creator import WalletCreator, create_new_wallet
-import config
+from core import config 
 from utils.logger import get_logger
 
 # Initialize logger
