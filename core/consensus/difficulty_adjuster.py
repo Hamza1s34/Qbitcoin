@@ -13,7 +13,7 @@ from typing import Dict, Any
 
 # Import configuration
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '../..')))
-import config
+from core import config
 
 # Import required utilities
 from utils.logger import get_logger

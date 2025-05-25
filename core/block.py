@@ -17,7 +17,7 @@ import yaml
 
 # Import configuration
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
-import config
+from core import config 
 from utils.logger import get_logger
 
 # Avoid circular imports by doing the import inside methods that need it

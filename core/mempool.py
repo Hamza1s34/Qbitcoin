@@ -16,7 +16,7 @@ import heapq
 # Import local modules
 import sys
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
-import config
+from core import config 
 from core.transaction import Transaction
 from utils.logger import get_logger
 from utils.serializer import serialize_transaction, deserialize_transaction

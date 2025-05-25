@@ -18,7 +18,7 @@ from typing import Dict, Any, Optional, List
 
 # Import configuration
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '../..')))
-import config
+from core import config
 
 # Import node and other components
 from core.node.node import Node 

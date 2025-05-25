@@ -17,7 +17,7 @@ import threading
 # Import local modules
 import sys
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
-import config
+from core import config 
 from core.block import Block
 from utils.logger import get_logger
 from utils.serializer import serialize_block, deserialize_block

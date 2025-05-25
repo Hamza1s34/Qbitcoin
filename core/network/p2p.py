@@ -11,20 +11,18 @@ import socket
 import threading
 import time
 import json
-import hashlib
-import base64
 import struct
 import random
 import ipaddress
 import queue
-from typing import Dict, List, Set, Optional, Any, Callable, Tuple, Union
+from typing import Dict, List, Set,  Any, Callable
 from dataclasses import dataclass
-from datetime import datetime, timedelta
 from enum import Enum
 import traceback
+
 # Import local modules
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '../..')))
-import config
+from core import config 
 from core.blockchain import Blockchain
 from core.block import Block
 from core.transaction import Transaction

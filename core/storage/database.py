@@ -17,7 +17,7 @@ import threading
 # Import configuration
 import sys
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '../..')))
-import config
+from core import config 
 from utils.logger import get_logger
 
 # Initialize logger

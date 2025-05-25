@@ -1,21 +1,23 @@
 # Qbitcoin Dependencies
 # Core dependencies
-pqcrypto==0.2.0  # For Falcon-512 post-quantum signature algorithm
-PyYAML>=6.0      # For YAML processing (genesis.yaml)
-base58>=2.1.1    # For address encoding
+pqcrypto  # For Falcon-512 post-quantum signature algorithm
+PyYAML     # For YAML processing (genesis.yaml)
+base58  # For address encoding
 
 # Web and API dependencies
-requests>=2.28.1  # For API client
-Flask>=2.2.2      # For web wallet
-Flask-Cors>=3.0.10  # For handling CORS in web app
-
+requests # For API client
+fastapi==0.115.12 
+pydantic==2.11.5
+Flask   # For web wallet
+Flask-Cors  # For handling CORS in web app
+uvicorn==0.34.2
 # Cryptography dependencies
-cryptography>=39.0.0  # For encryption/decryption in wallet
+cryptography  # For encryption/decryption in wallet
 
 # Additional libraries
-argparse>=1.4.0    # For command-line argument parsing
-pathlib>=1.0.1     # For path manipulation
-typing>=3.7.4.3    # For type hints
+argparse   # For command-line argument parsing
+pathlib  # For path manipulation
+typing   # For type hints
 
 # Development dependencies
-pytest>=7.3.1      # For testing
+pytest     # For testing

@@ -25,7 +25,7 @@ from pydantic import BaseModel, Field, validator
 
 # Import local modules
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '../..')))
-import config
+from core import config 
 from core.blockchain import Blockchain
 from core.block import Block
 from core.transaction import Transaction
