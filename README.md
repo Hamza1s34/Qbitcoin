@@ -80,7 +80,7 @@ QBITCOIN/
 To start a QBITCOIN node:
 
 ```bash
-python -m core.node.main --port 8000
+python  core.node.node_cli.py
 ```
 
 Additional configuration options:
