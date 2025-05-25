@@ -17,6 +17,11 @@ current_dir = Path(__file__).resolve().parent
 if str(current_dir) not in sys.path:
     sys.path.append(str(current_dir))
 
+# Add the project root directory to the Python path
+project_root = current_dir.parent
+if str(project_root) not in sys.path:
+    sys.path.append(str(project_root))
+
 # Import required modules
 from utils.wallet_creator import WalletCreator, create_new_wallet
 from core import config 
