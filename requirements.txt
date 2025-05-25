@@ -16,9 +16,8 @@ cryptography==45.0.2 # For encryption/decryption in wallet
 
 # Additional libraries
 argparse==1.4.0  # For command-line argument parsing
-pathlib==1.0.1# For path manipulation
+pathlib==1.0.1 # For path manipulation
 typing==3.7.4.3  # For type hints
 
 # Development dependencies
-pytest==8.3.5
-   # For testing
+pytest==8.3.5 # For testing

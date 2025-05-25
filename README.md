@@ -92,9 +92,9 @@ Additional configuration options:
 ### Creating a Wallet
 
 ```bash
-python scripts/create_wallets.py --output wallet.dat
+python scripts/create_wallets.py 
 ```
-
+by default this will create 2 wallets in data/wallets 
 ## 📊 Features
 
 - **Quantum-resistant signatures**: Future-proof security
