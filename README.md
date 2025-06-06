@@ -37,7 +37,7 @@ cd Qbitcoin
 pip install -r requirements.txt
 ```
 
-3. Run the application:
+3. Run the node:
 ```bash
 python start_qbitcoin.py
 ```
@@ -69,6 +69,9 @@ Run the test suite:
 ```bash
 pytest tests/
 ```
+## Note 
+Please note that this project is in the final development phase, so some files and features may be incomplete. If you observe any issues, kindly provide feedback or open an issue on the repository. Your input is greatly appreciated!
+
 
 ## Contributing
 
