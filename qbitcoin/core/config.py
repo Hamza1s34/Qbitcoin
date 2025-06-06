@@ -84,7 +84,7 @@ class UserConfig(object):
         #        PUBLIC API CONFIGURATION
         # ======================================
         self.public_api_enabled = True
-        self.public_api_host = "127.0.0.1"
+        self.public_api_host = "0.0.0.0" # only if you want to expose the API to the public 
         self.public_api_port = 19009
         self.public_api_threads = 1
         self.public_api_max_concurrent_rpc = 100
@@ -124,7 +124,7 @@ class UserConfig(object):
         # ======================================
         #        WALLET API CONFIGURATION
         # ======================================
-        self.wallet_api_host = "127.0.0.1"
+        self.wallet_api_host = "0.0.0.0" #same as public api 
         self.wallet_api_port = 19010
         self.wallet_api_threads = 1
         self.wallet_api_max_concurrent_rpc = 100
