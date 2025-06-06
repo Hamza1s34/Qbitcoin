@@ -1,0 +1,11 @@
+[
+  {
+    "address": "encrypted_address_data_base64",
+    "private_key": "encrypted_private_key_data_base64",
+    "public_key": "encrypted_public_key_data_base64",
+    "private_key_size": 1281,
+    "public_key_size": 897,
+    "signature_type": "FALCON",
+    "encrypted": true
+  }
+]

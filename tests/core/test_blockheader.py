@@ -1,0 +1,234 @@
+# coding=utf-8
+# Distributed under the MIT software license, see the accompanying
+# file LICENSE or http://www.opensource.org/licenses/mit-license.php.
+import sys
+import os
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '../..')))
+
+
+from unittest import TestCase
+
+from mock import mock, Mock
+from pyqrllib.pyqrllib import bin2hstr
+
+from qbitcoin.core import config
+from qbitcoin.core.misc import logger
+from qbitcoin.core.BlockHeader import BlockHeader
+from qbitcoin.crypto.misc import sha256
+
+logger.initialize_default()
+
+
+@mock.patch('qbitcoin.core.misc.ntp.getTime', return_value=1748476900)
+class TestBlockHeader(TestCase):
+    def setUp(self):
+        with mock.patch('qbitcoin.core.misc.ntp.getTime', return_value=1748476900) as time_mock:
+            self.block_header = BlockHeader.create(config.dev,
+                                                   1,
+                                                   sha256(b'prev'),
+                                                   time_mock.return_value,
+                                                   sha256(b'txs'),
+                                                   10,
+                                                   0,
+                                                   None)
+
+        self.fee_reward = 10
+        self.coinbase_amount = self.block_header.block_reward + self.fee_reward
+
+        # this variable is for validate_parent_child_relation()
+        self.m_parent_block = Mock(
+            name='mock Parent Block',
+            block_number=self.block_header.block_number - 1,
+            headerhash=self.block_header.prev_headerhash,
+            timestamp=self.block_header.timestamp - 1
+        )
+
+    def test_create(self, time_mock):
+        b = BlockHeader.create(dev_config=config.dev, blocknumber=1, prev_headerhash=b'headerhash',
+                               prev_timestamp=10, hashedtransactions=b'some_data', fee_reward=1,
+                               seed_height=0, seed_hash=None)
+        self.assertIsNotNone(b)
+
+        b = BlockHeader.create(dev_config=config.dev, blocknumber=1, prev_headerhash=b'headerhash',
+                               prev_timestamp=10, hashedtransactions=b'some_data', fee_reward=1,
+                               seed_height=0, seed_hash=None)
+
+    def test_create_fails_when_prev_timestamp_is_negative(self, time_mock):
+        # The only way to get it to fail in this mode is to pass a negative timestamp. Which should never happen IRL.
+        time_mock.return_value = 0
+        b = BlockHeader.create(config.dev, 1, sha256(b'prev'), -10, sha256(b'txs'), 10, seed_height=0, seed_hash=None)
+        self.assertIsNone(b)
+
+    def test_create_uses_prev_timestamp_when_genesis_block(self, time_mock):
+        genesis = BlockHeader.create(config.dev, 0, sha256(b'Random Scifi Book Title'),
+                                     time_mock.return_value, sha256(b'txs'), 10, 0, None)
+        self.assertEqual(genesis.timestamp, time_mock.return_value)
+
+    def test_block_reward_calc_genesis_is_total_coin_supply(self, time_mock):
+        genesis = BlockHeader.create(config.dev, 0, sha256(b'Random Scifi Book Title'),
+                                     time_mock.return_value, sha256(b'txs'), 10, 0, None)
+        self.assertEqual(config.dev.supplied_coins, genesis.block_reward)
+
+    def test_init(self, time_mock):
+        block_header = BlockHeader()
+        self.assertIsNotNone(block_header)  # just to avoid warnings
+
+    def test_init2(self, time_mock):
+        self.assertIsNotNone(self.block_header)  # just to avoid warnings
+
+    def test_blob(self, time_mock):
+        self.assertEqual('00e2d03d9edce17b44cca3c92004f4336116699c3341c05771d012f0c8676afe1188d34f8dd0'
+                          'ce000000000000000000000000000000000025236e8311f9b9d0974c16380f92298b6582681d',
+                          bin2hstr(self.block_header.mining_blob(config.dev)))
+        self.assertEqual(config.dev.mining_blob_size_in_bytes, len(self.block_header.mining_blob(config.dev)))
+
+    def test_hash(self, time_mock):
+        header_hash = self.block_header.generate_headerhash(config.dev)
+
+        self.assertEqual('6e498c905496653551541daf52b16226a8738df94b0ad316a8efc52603b5009c', bin2hstr(header_hash))
+
+        self.assertEqual(bin2hstr(header_hash), bin2hstr(self.block_header.headerhash))
+
+        self.assertEqual(32, len(self.block_header.headerhash))
+
+    def test_hash_nonce(self, time_mock):
+        self.block_header.set_nonces(config.dev, 100, 0)
+
+        header_hash = self.block_header.generate_headerhash(config.dev)
+
+        self.assertEqual('c7f35bfaf5b059f488191c7365586829f43d230c71a6755246dd77e058a27127',
+                          bin2hstr(header_hash))
+
+        self.assertEqual(bin2hstr(header_hash),
+                          bin2hstr(self.block_header.headerhash))
+
+        self.assertEqual(32, len(self.block_header.headerhash))
+
+    def test_validate_pass(self, time_mock):
+        result = self.block_header.validate(self.fee_reward, self.coinbase_amount,
+                                            self.block_header.tx_merkle_root, config.dev)
+        self.assertTrue(result)
+
+    def test_validate_fail_timestamp_checks(self, time_mock):
+        # The Block's timestamp is too far in the future
+        time_mock.return_value = 10  # set our current_time way backwards
+        result = self.block_header.validate(self.fee_reward, self.coinbase_amount,
+                                            self.block_header.tx_merkle_root, config.dev)
+        self.assertFalse(result)
+        time_mock.return_value = 1748476900
+
+        # Block came out before Genesis block?!
+        self.block_header._data.timestamp_seconds = 0
+        result = self.block_header.validate(self.fee_reward, self.coinbase_amount,
+                                            self.block_header.tx_merkle_root, config.dev)
+        self.assertFalse(result)
+        self.block_header._data.timestamp_seconds = 1748476900
+
+    def test_validate_fail_headerhash(self, time_mock):
+        # BlockHeader recalculates the headerhash. If the recalculation is different...
+        with mock.patch('qbitcoin.core.BlockHeader.BlockHeader.generate_headerhash', return_value=b'nonsense'):
+            result = self.block_header.validate(self.fee_reward, self.coinbase_amount,
+                                                self.block_header.tx_merkle_root, config.dev)
+            self.assertFalse(result)
+
+    def test_validate_fail_rewards_and_wrong_merkleroot(self, time_mock):
+        # Recalculates the expected block_reward for this block_number. If the recalculation is different...
+        with mock.patch('qbitcoin.core.BlockHeader.BlockHeader.block_reward_calc', return_value=0):
+            result = self.block_header.validate(self.fee_reward, self.coinbase_amount,
+                                                self.block_header.tx_merkle_root, config.dev)
+            self.assertFalse(result)
+
+        # The function above says that the fee_reward should be 3, but the BlockHeader thought it was 10
+        result = self.block_header.validate(3, self.block_header.block_reward + 3,
+                                            self.block_header.tx_merkle_root, config.dev)
+        self.assertFalse(result)
+
+        # coinbase_amount should be BlockHeader.block_reward + BlockHeader.fee_reward
+        result = self.block_header.validate(self.fee_reward, self.block_header.block_reward + 5,
+                                            self.block_header.tx_merkle_root, config.dev)
+        self.assertFalse(result)
+
+        # The function above says that the Merkle root should be something else
+        result = self.block_header.validate(self.fee_reward, self.coinbase_amount,
+                                            b'some other merkle root', config.dev)
+        self.assertFalse(result)
+
+    def test_validate_parent_child_relation(self, time_mock):
+        # Verifies that a Block is the parent of this Block.
+        # If we pass it a None, it should return False.
+        result = self.block_header.validate_parent_child_relation(None)
+        self.assertFalse(result)
+
+    def test_validate_parent_child_relation_pass(self, time_mock):
+        result = self.block_header.validate_parent_child_relation(self.m_parent_block)
+        self.assertTrue(result)
+
+    def test_validate_parent_child_relation_parent_block_number_must_be_smaller_by_1(self, time_mock):
+        # The Parent Block.block_number must be smaller by 1
+        self.m_parent_block.block_number = self.block_header.block_number - 2
+        result = self.block_header.validate_parent_child_relation(self.m_parent_block)
+        self.assertFalse(result)
+
+    def test_validate_parent_child_relation_parent_headerhash_is_prev_headerhash(self, time_mock):
+        # The Parent Block's headerhash must be the BlockHeader.prev_headerhash
+        self.m_parent_block.headerhash = b'something else totally'
+        result = self.block_header.validate_parent_child_relation(self.m_parent_block)
+        self.assertFalse(result)
+
+    def test_validate_parent_child_relation_parent_block_must_be_older(self, time_mock):
+        self.m_parent_block.timestamp = self.block_header.timestamp + 10
+        result = self.block_header.validate_parent_child_relation(self.m_parent_block)
+        self.assertFalse(result)
+
+    def test_verify_blob(self, time_mock):
+        # verify_blob() ensures the miner did not tamper with anything other than the mining nonce.
+        blob = bytearray(self.block_header.mining_blob(config.dev))
+        # if we meddle with the bytes between mining_nonce_offset and mining_nonce_offset + 17, the blob should pass
+        for i in range(config.dev.mining_nonce_offset, config.dev.mining_nonce_offset + 17):
+            blob[i] = 6
+        # it should still pass verification
+        result = self.block_header.verify_blob(blob, config.dev)
+        self.assertTrue(result)
+
+        # But if we change the bits outside of this range, verification will fail.
+        blob[56] = 6
+        result = self.block_header.verify_blob(blob, config.dev)
+        self.assertFalse(result)
+
+    def test_update_merkle_root(self, time_mock):
+        # update_merkle_root() changes the BlockHeader's merkle root,
+        # calls set_nonces() to reset the nonces to 0 and
+        # recalculates the blockhash.
+        self.block_header.set_nonces(config.dev, 1, 1)
+        old_hash = self.block_header.headerhash
+
+        self.block_header.update_merkle_root(config.dev, b'new merkle root')
+
+        self.assertEqual(self.block_header.mining_nonce, 0)
+        self.assertEqual(self.block_header.extra_nonce, 0)
+        self.assertNotEqual(old_hash, self.block_header.headerhash)
+
+    def test_set_mining_nonce_from_blob(self, time_mock):
+        # set_mining_nonce_from_blob() takes a binary blob and just copies the nonce, extranonce over.
+        # See BlockHeader.mining_blob for construction details. nonce + extranonce + padding = 4 + 8 + 5
+        mock_blob = bytearray(100)
+        # nonce
+        for i in range(config.dev.mining_nonce_offset, config.dev.mining_nonce_offset + 4):
+            mock_blob[i] = 1
+        # extranonce
+        for i in range(config.dev.extra_nonce_offset, config.dev.extra_nonce_offset + 8):
+            mock_blob[i] = 2
+        # 5 bytes padding, for pool use apparently
+        for i in range(config.dev.extra_nonce_offset + 8, config.dev.extra_nonce_offset + 14):
+            mock_blob[i] = 3
+
+        self.block_header.set_mining_nonce_from_blob(mock_blob, config.dev)
+
+        self.assertEqual(self.block_header.mining_nonce, 16843009)
+        self.assertEqual(self.block_header.extra_nonce, 144680345676153346)
+
+def main():
+    import unittest
+    unittest.main()
+if __name__ == '__main__':
+    main()

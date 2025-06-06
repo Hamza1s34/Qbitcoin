@@ -1,0 +1,9 @@
+# Requirements for QRL API Test Script
+click>=8.0.0
+grpc>=1.0.0
+grpcio>=1.50.0
+protobuf>=3.19.0
+pyqrllib>=1.0.0
+
+# Note: qbitcoin modules are imported from the local QRL installation
+# Make sure you have QRL properly installed and configured

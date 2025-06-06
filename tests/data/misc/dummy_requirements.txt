@@ -1,0 +1,4 @@
+# This is a dummy requirements file for testing
+# It contains a non-existent package to trigger failure
+non-existent-package-for-testing==999.999.999
+another-fake-package>=1.0.0

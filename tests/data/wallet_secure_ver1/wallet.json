@@ -1,0 +1,14 @@
+{
+  "version": 1,
+  "encrypted": true,
+  "addresses": [
+    {
+      "address": "Q010400d9f1efe5b272e042dcc8ef690f0e90ca8b0b6edba0d26f81e7aff12a6754b21788169f7f",
+      "private_key": "encrypted_private_key_data_base64",
+      "public_key": "encrypted_public_key_data_base64",
+      "private_key_size": 1281,
+      "public_key_size": 897,
+      "signature_type": "FALCON"
+    }
+  ]
+}

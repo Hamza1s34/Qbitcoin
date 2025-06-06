@@ -1,0 +1,16 @@
+genesisBalance:
+- address: AVsTvjko62pBkYTuz9TDuWegPLRO2CGDbA==
+  balance: '20000000000000000'
+header:
+  hashHeader: sqeqgN36hKwRfFgivUBGFgWFI4+FD/6CZfO6HSZhYmQ=
+  hashHeaderPrev: VGhlIHNsZWVwZXIgbXVzdCBhd2FrZW4=
+  merkleRoot: 42LdGGUpX3mi5nfozOrv6k/9LF4XgKx2tuXQzLTxGwI=
+  rewardBlock: '20000000000000000'
+  timestampSeconds: '1748476800'
+transactions:
+- coinbase:
+    addrTo: AVsTvjko62pBkYTuz9TDuWegPLRO2CGDbA==
+    amount: '20000000000000000'
+  masterAddr: AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=
+  nonce: '1'
+  transactionHash: 42LdGGUpX3mi5nfozOrv6k/9LF4XgKx2tuXQzLTxGwI=

@@ -1,0 +1,505 @@
+// Distributed under the MIT software license, see the accompanying
+// file LICENSE or http://www.opensource.org/licenses/mit-license.php.
+
+syntax = "proto3";
+
+package qrl;
+
+import "qbit.proto";
+
+////////////////////////////
+////////////////////////////
+////////////////////////////
+//////     API       ///////
+////////////////////////////
+////////////////////////////
+////////////////////////////
+
+// This service describes the Wallet API
+service WalletAPI
+{
+    rpc AddNewAddress(AddNewAddressReq) returns (AddNewAddressResp);
+
+    rpc AddNewAddressWithSlaves(AddNewAddressWithSlavesReq) returns (AddNewAddressResp);
+
+    //rpc AddAddressFromSeed(AddAddressFromSeedReq) returns (AddAddressFromSeedResp);
+
+    rpc ListAddresses(ListAddressesReq) returns(ListAddressesResp);
+
+    rpc RemoveAddress(RemoveAddressReq) returns (RemoveAddressResp);
+
+    rpc IsValidAddress(ValidAddressReq) returns (ValidAddressResp);
+
+    rpc EncryptWallet(EncryptWalletReq) returns (EncryptWalletResp);
+
+    rpc LockWallet(LockWalletReq) returns (LockWalletResp);
+
+    rpc UnlockWallet(UnlockWalletReq) returns (UnlockWalletResp);
+
+    rpc GetRecoverySeeds(GetRecoverySeedsReq) returns (GetRecoverySeedsResp);
+
+    rpc GetWalletInfo(GetWalletInfoReq) returns (GetWalletInfoResp);
+
+    rpc RelayTransferTxn(RelayTransferTxnReq) returns (RelayTxnResp);
+
+    rpc RelayTransferTxnBySlave(RelayTransferTxnBySlaveReq) returns (RelayTxnResp);
+
+    rpc RelayMessageTxn(RelayMessageTxnReq) returns (RelayTxnResp);
+
+    rpc RelayMessageTxnBySlave(RelayMessageTxnBySlaveReq) returns (RelayTxnResp);
+
+    rpc RelayTokenTxn(RelayTokenTxnReq) returns (RelayTxnResp);
+
+    rpc RelayTokenTxnBySlave(RelayTokenTxnBySlaveReq) returns (RelayTxnResp);
+
+    rpc RelayTransferTokenTxn(RelayTransferTokenTxnReq) returns (RelayTxnResp);
+
+    rpc RelayTransferTokenTxnBySlave(RelayTransferTokenTxnBySlaveReq) returns (RelayTxnResp);
+
+    rpc RelaySlaveTxn(RelaySlaveTxnReq) returns (RelayTxnResp);
+
+    rpc RelaySlaveTxnBySlave(RelaySlaveTxnBySlaveReq) returns (RelayTxnResp);
+
+    rpc ChangePassphrase(ChangePassphraseReq) returns (ChangePassphraseResp);
+
+    rpc GetTransactionsByAddress(TransactionsByAddressReq) returns (TransactionsByAddressResp);
+
+    rpc GetPaginatedTransactionsByAddress(PaginatedTransactionsByAddressReq) returns (PaginatedTransactionsByAddressResp);
+
+    rpc GetTransaction(TransactionReq) returns (TransactionResp);
+
+    rpc GetBalance(BalanceReq) returns (BalanceResp);
+
+    rpc GetTotalBalance(TotalBalanceReq) returns (TotalBalanceResp);
+
+    rpc GetOTS(OTSReq) returns (OTSResp);
+
+    rpc GetHeight(HeightReq) returns (HeightResp);
+
+    rpc GetBlock(BlockReq) returns (BlockResp);
+
+    rpc GetBlockByNumber(BlockByNumberReq) returns (BlockResp);
+
+    rpc GetAddressFromPK(AddressFromPKReq) returns (AddressFromPKResp);
+
+    rpc GetNodeInfo(NodeInfoReq) returns (NodeInfoResp);
+
+}
+
+message AddNewAddressReq {
+    uint64 height = 1;
+    string hash_function = 2;
+}
+
+message AddNewAddressResp {
+    uint32 code = 1;
+    string error = 2;
+    string address = 3;
+}
+
+message AddNewAddressWithSlavesReq {
+    uint64 height = 1;  // Height of Master Address
+    uint64 number_of_slaves = 2;
+    string hash_function = 3;
+}
+
+message AddAddressFromSeedReq {
+    string seed = 1;  // Seed can be either hexseed or mnemonic
+}
+
+message AddAddressFromSeedResp {
+    uint32 code = 1;
+    string error = 2;
+    string address = 3;
+}
+
+message ListAddressesReq {
+
+}
+
+message ListAddressesResp {
+    uint32 code = 1;
+    string error = 2;
+    repeated string addresses = 3;
+}
+
+message RemoveAddressReq {
+    string address = 1;
+}
+
+message RemoveAddressResp {
+    uint32 code = 1;
+    string error = 2;
+}
+
+message ValidAddressReq {
+    string address = 1;
+}
+
+message ValidAddressResp {
+    uint32 code = 1;
+    string error = 2;
+    string valid = 3;
+}
+
+
+message EncryptWalletReq {
+    string passphrase = 1;
+}
+
+message EncryptWalletResp {
+    uint32 code = 1;
+    string error = 2;
+}
+
+message UnlockWalletReq {
+    string passphrase = 1;
+}
+
+message UnlockWalletResp {
+    uint32 code = 1;
+    string error = 2;
+}
+
+message LockWalletReq {
+}
+
+message LockWalletResp {
+    uint32 code = 1;
+    string error = 2;
+}
+
+message GetRecoverySeedsReq {
+    string address = 1;
+}
+
+message GetRecoverySeedsResp {
+    uint32 code = 1;
+    string error = 2;
+    string hexseed = 3;
+    string mnemonic = 4;
+}
+
+message GetWalletInfoReq {
+
+}
+
+message GetWalletInfoResp {
+    uint32 code = 1;
+    string error = 2;
+    uint32 version = 3;
+    uint64 address_count = 4;
+    bool is_encrypted = 5;
+}
+
+message RelayTransferTxnReq {
+    repeated string addresses_to = 1;
+    repeated uint64 amounts = 2;
+    uint64 fee = 3;
+    string master_address = 4;
+    string signer_address = 5;
+    uint64 ots_index = 6;
+}
+
+message RelayTransferTxnBySlaveReq {
+    repeated string addresses_to = 1;
+    repeated uint64 amounts = 2;
+    uint64 fee = 3;
+    string master_address = 4;
+}
+
+message RelayMessageTxnReq {
+    string message = 1;
+    uint64 fee = 2;
+    string master_address = 3;
+    string signer_address = 4;
+    uint64 ots_index = 5;
+}
+
+message RelayMessageTxnBySlaveReq {
+    string message = 1;
+    uint64 fee = 2;
+    string master_address = 3;
+}
+
+message RelayTokenTxnReq {
+    string symbol = 1;
+    string name = 2;
+    string owner = 3;
+    uint64 decimals = 4;
+    repeated string addresses = 5;
+    repeated uint64 amounts = 6;
+    uint64 fee = 7;
+    string master_address = 8;
+    string signer_address = 9;
+    uint64 ots_index = 10;
+}
+
+message RelayTokenTxnBySlaveReq {
+    string symbol = 1;
+    string name = 2;
+    string owner = 3;
+    uint64 decimals = 4;
+    repeated string addresses = 5;
+    repeated uint64 amounts = 6;
+    uint64 fee = 7;
+    string master_address = 8;
+}
+
+message RelayTransferTokenTxnReq {
+    repeated string addresses_to = 1;
+    string token_txhash = 2;
+    repeated uint64 amounts = 3;
+    uint64 fee = 4;
+    string master_address = 5;
+    string signer_address = 6;
+    uint64 ots_index = 7;
+}
+
+message RelayTransferTokenTxnBySlaveReq {
+    repeated string addresses_to = 1;
+    string token_txhash = 2;
+    repeated uint64 amounts = 3;
+    uint64 fee = 4;
+    string master_address = 5;
+}
+
+message RelaySlaveTxnReq {
+    repeated bytes slave_pks = 1;
+    repeated uint32 access_types = 2;
+    uint64 fee = 3;
+    string master_address = 4;
+    string signer_address = 5;
+    uint64 ots_index = 6;
+}
+
+message RelaySlaveTxnBySlaveReq {
+    repeated bytes slave_pks = 1;
+    repeated uint32 access_types = 2;
+    uint64 fee = 3;
+    string master_address = 4;
+}
+
+message RelayTxnResp {
+    uint32 code = 1;
+    string error = 2;
+    PlainTransaction tx = 3;
+}
+
+message ChangePassphraseReq {
+    string oldPassphrase = 1;
+    string newPassphrase = 2;
+}
+
+message ChangePassphraseResp {
+    uint32 code = 1;
+    string error = 2;
+}
+
+message TransactionsByAddressReq {
+    string address = 1;
+}
+
+message TransactionsByAddressResp {
+    uint32 code = 1;
+    string error = 2;
+    repeated MiniTransaction mini_transactions = 3;
+    uint64 balance = 4;
+}
+
+message PaginatedTransactionsByAddressReq {
+    string address = 1;
+    uint64 item_per_page = 2;
+    uint64 page_number = 3;
+}
+
+message PaginatedTransactionsByAddressResp {
+    uint32 code = 1;
+    string error = 2;
+    repeated MiniTransaction mini_transactions = 3;
+    uint64 balance = 4;
+}
+
+message TransactionReq {
+    string tx_hash = 1;
+}
+
+message TransactionResp {
+    uint32 code = 1;
+    string error = 2;
+    PlainTransaction tx = 3;
+    string confirmations = 4;
+    uint64 block_number = 5;
+    string block_header_hash = 6;
+}
+
+message BalanceReq {
+    string address = 1;
+}
+
+message BalanceResp {
+    uint32 code = 1;
+    string error = 2;
+    string balance = 3;
+}
+
+message TotalBalanceReq {
+}
+
+message TotalBalanceResp {
+    uint32 code = 1;
+    string error = 2;
+    string balance = 3;
+}
+
+message OTSReq {
+    string address = 1;
+}
+
+message OTSResp {
+    uint32 code = 1;
+    string error = 2;
+    repeated OTSBitfieldByPage ots_bitfield_by_page = 3;
+    uint64 next_unused_ots_index = 4;
+    bool unused_ots_index_found = 5;
+}
+
+message HeightReq {
+}
+
+message HeightResp {
+    uint32 code = 1;
+    string error = 2;
+    uint64 height = 3;
+}
+
+message BlockReq {
+    string header_hash = 1;
+}
+
+message BlockResp {
+    uint32 code = 1;
+    string error = 2;
+    PlainBlock block = 3;
+}
+
+message BlockByNumberReq {
+    uint64 block_number = 1;
+}
+
+message AddressFromPKReq {
+    string pk = 1;
+}
+
+message AddressFromPKResp {
+    uint32 code = 1;
+    string error = 2;
+    string address = 3;
+}
+
+message NodeInfoReq {
+}
+
+message NodeInfoResp {
+    uint32 code = 1;
+    string error = 2;
+
+    string version = 3;
+    string num_connections = 4;
+    string num_known_peers = 5;
+    uint64 uptime = 6;               // Uptime in seconds
+    uint64 block_height = 7;
+    string block_last_hash = 8;
+    string network_id = 9;
+}
+
+message PlainGenesisBalance {
+    string address = 1;
+    uint64 balance = 2;
+}
+
+message PlainAddressAmount {
+    string address = 1;
+    uint64 amount = 2;
+}
+
+message PlainTransaction {
+    string master_addr = 1;
+    uint64 fee = 2;
+    string public_key = 3;
+    string signature = 4;
+    uint64 nonce = 5;
+    string transaction_hash = 6;
+    string signer_addr = 7;
+
+    oneof transactionType {
+        Transfer transfer = 8;
+        CoinBase coinbase = 9;
+        LatticePublicKey latticePK = 10;
+        Message message = 11;
+        Token token = 12;
+        TransferToken transfer_token = 13;
+        Slave slave = 14;
+    }
+
+    //////////
+    message Transfer {
+        repeated string addrs_to = 1;
+        repeated uint64 amounts = 2;
+    }
+
+    message CoinBase {
+        string addr_to = 1;
+        uint64 amount = 2;
+    }
+
+    message LatticePublicKey {
+        string kyber_pk = 1;
+        string dilithium_pk = 2;
+    }
+
+    message Message {
+        string message_hash = 1;
+    }
+
+    message Token {
+        string symbol = 1;
+        string name = 2;
+        string owner = 3;
+        uint64 decimals = 4;
+        repeated PlainAddressAmount initial_balances = 5;
+    }
+
+    message TransferToken {
+        string token_txhash = 1;
+        repeated string addrs_to = 2;
+        repeated uint64 amounts = 3;
+    }
+
+    message Slave {
+        repeated string slave_pks = 1;
+        repeated uint32 access_types = 2;
+    }
+}
+
+message PlainBlockHeader {
+    // Header
+    string hash_header = 1;
+
+    uint64 block_number = 2;
+    uint64 timestamp_seconds = 3;
+    string hash_header_prev = 4;
+    uint64 reward_block = 5;
+    uint64 reward_fee = 6;
+    string merkle_root = 7;
+
+    uint32 mining_nonce = 8;
+    uint64 extra_nonce = 9;
+}
+
+message PlainBlock {
+    PlainBlockHeader header = 1;
+    repeated PlainTransaction transactions = 2;
+
+    repeated PlainGenesisBalance genesis_balance = 3;
+}
