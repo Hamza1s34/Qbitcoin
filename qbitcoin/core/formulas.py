@@ -16,7 +16,7 @@ def get_halving_interval(dev_config: DevConfig) -> int:
 
 def get_initial_block_reward(dev_config: DevConfig) -> Decimal:
     """
-    Return the initial block reward: 2.5 QRL = 2.5 * 10^9 shor
+    Return the initial block reward: 2.5 Qbitcoin = 2.5 * 10^9 Quark
     """
     return Decimal('2.5') * dev_config.shor_per_quanta
 
@@ -25,7 +25,7 @@ def remaining_emission(block_n, dev_config: DevConfig) -> Decimal:
     """
     Calculate remaining emission at block_n using halving mechanism.
     Starting with 10M QRL available for mining (30M max - 20M genesis)
-    Initial reward: 2.5 QRL per block
+    Initial reward: 2.5 Qbitcoin per block
     Halving every 2 years (1,051,200 blocks)
     """
     if block_n <= 0:
@@ -55,7 +55,7 @@ def remaining_emission(block_n, dev_config: DevConfig) -> Decimal:
 def block_reward(block_number: int, dev_config: DevConfig) -> Decimal:
     """
     Calculate block reward using halving mechanism.
-    Initial reward: 2.5 QRL per block
+    Initial reward: 2.5 Qbitcoin per block
     Halving every 2 years (1,051,200 blocks)
     """
     if block_number <= 0:
