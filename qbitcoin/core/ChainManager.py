@@ -476,10 +476,22 @@ class ChainManager:
                                                        0,
                                                        True,
                                                        None)
+            
+            # Initialize coinbase address with total remaining supply after genesis allocation
+            total_genesis_allocation = 0
             for genesis_balance in GenesisBlock().genesis_balance:
                 bytes_addr = genesis_balance.address
                 state_container.addresses_state[bytes_addr] = OptimizedAddressState.get_default(bytes_addr)
                 state_container.addresses_state[bytes_addr]._data.balance = genesis_balance.balance
+                total_genesis_allocation += genesis_balance.balance
+                
+            # Calculate remaining supply for coinbase (for mining rewards)
+            total_supply = int(config.dev.max_coin_supply * config.dev.shor_per_quanta)
+            coinbase_initial_balance = total_supply - total_genesis_allocation
+            
+            # Initialize coinbase address
+            state_container.addresses_state[config.dev.coinbase_address] = OptimizedAddressState.get_default(config.dev.coinbase_address)
+            state_container.addresses_state[config.dev.coinbase_address]._data.balance = coinbase_initial_balance
 
             for tx_idx in range(1, len(genesis_block.transactions)):
                 tx = Transaction.from_pbdata(genesis_block.transactions[tx_idx])
