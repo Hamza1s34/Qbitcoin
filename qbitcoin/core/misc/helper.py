@@ -25,7 +25,14 @@ def parse_qaddress(qaddress: str, check_multi_sig_address=False) -> bytes:
     :return:
     """
     try:
+        from qbitcoin.core import config
+        
         qaddress = parse_hexblob(qaddress[1:])
+        
+        # Special case for coinbase address - allow it even if it doesn't pass normal validation
+        if qaddress == config.dev.coinbase_address:
+            return qaddress
+            
         if not OptimizedAddressState.address_is_valid(qaddress):
             print("checking for multi_sig_address ", check_multi_sig_address)
             if check_multi_sig_address:
