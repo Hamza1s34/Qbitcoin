@@ -486,7 +486,7 @@ class ChainManager:
                 total_genesis_allocation += genesis_balance.balance
                 
             # Calculate remaining supply for coinbase (for mining rewards)
-            total_supply = int(config.dev.max_coin_supply * config.dev.shor_per_quanta)
+            total_supply = int(config.dev.max_coin_supply * config.dev.quark_per_qbitcoin)
             coinbase_initial_balance = total_supply - total_genesis_allocation
             
             # Initialize coinbase address

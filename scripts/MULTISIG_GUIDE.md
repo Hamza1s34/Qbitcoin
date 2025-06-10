@@ -213,7 +213,7 @@ The provided script (`multisig_falcon_guide.py`) demonstrates:
 
 1. **Wallet Creation**: Creates 4 Falcon-512 wallets (3 signatories + 1 destination)
 2. **MultiSig Setup**: Creates a 3-signatory wallet with weights [40, 35, 25] and threshold 60
-3. **Spend Proposal**: Alice proposes sending 10 Quanta to destination
+3. **Spend Proposal**: Alice proposes sending 10 Qbitcoin to destination
 4. **Voting Process**: Bob and Charlie vote to approve
 5. **Execution**: Transaction would execute once threshold is met
 

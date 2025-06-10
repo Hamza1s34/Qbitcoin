@@ -218,7 +218,7 @@ class OptimizedAddressState(object):
                                                      falcon_pk_count=0)
 
         if address == config.dev.coinbase_address:
-            address_state._data.balance = int(config.dev.max_coin_supply * config.dev.shor_per_quanta)
+            address_state._data.balance = int(config.dev.max_coin_supply * config.dev.quark_per_qbitcoin)
         return address_state
 
     @staticmethod

@@ -24,3 +24,5 @@ cryptography
 base58
 mock
 daemonize
+
+#  /home/codespace/.local/share/qbitcoin
