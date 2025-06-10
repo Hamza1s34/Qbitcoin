@@ -88,6 +88,10 @@ def main():
     logger.debug("=====================================================================================")
     logger.info("QRL Path: %s", args.qrl_dir)
     config.user.qrl_dir = os.path.expanduser(os.path.normpath(args.qrl_dir) + qrl_dir_post_fix)
+    
+    # Log the data directory path once at startup
+    logger.info("Qbitcoin data directory: %s", config.user.qrl_dir)
+    
     config.create_path(config.user.qrl_dir, copy_files)
     config.user.load_yaml(config.user.config_path)
 

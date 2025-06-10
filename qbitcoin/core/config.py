@@ -68,8 +68,8 @@ class UserConfig(object):
         self.pending_transaction_pool_reserve = int(self.pending_transaction_pool_size * 0.01)
         self.stale_transaction_threshold = 15  # 15 Blocks
 
-        # Store data in project directory instead of home directory
-        self._qrl_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))), "data")
+        # Store data in user's application data directory (outside project)
+        self._qrl_dir = self._get_default_data_directory()
 
         # ======================================
         #        ADMIN API CONFIGURATION
@@ -133,6 +133,25 @@ class UserConfig(object):
         self.load_yaml(self.config_path)
         # WARNING! loading should be the last line.. any new setting after this will not be updated by the config file
 
+    def _get_default_data_directory(self):
+        """Get the default data directory based on the operating system"""
+        import platform
+        
+        system = platform.system()
+        home = expanduser("~")
+        
+        if system == "Windows":
+            # Windows: %APPDATA%\Qbitcoin
+            app_data = os.environ.get('APPDATA', os.path.join(home, 'AppData', 'Roaming'))
+            return os.path.join(app_data, 'Qbitcoin')
+        elif system == "Darwin":  # macOS
+            # macOS: ~/Library/Application Support/Qbitcoin
+            return os.path.join(home, 'Library', 'Application Support', 'Qbitcoin')
+        else:  # Linux and other Unix-like systems
+            # Linux: ~/.local/share/qbitcoin or ~/.qbitcoin (fallback)
+            xdg_data_home = os.environ.get('XDG_DATA_HOME', os.path.join(home, '.local', 'share'))
+            return os.path.join(xdg_data_home, 'qbitcoin')
+
     @property
     def qrl_dir(self):
         return self._qrl_dir
@@ -187,10 +206,22 @@ class UserConfig(object):
 
 
 def create_path(path, copy_files=None):
+    """Create directory path if it doesn't exist"""
     tmp_path = os.path.join(path)
     if os.path.isdir(tmp_path):
         return
-    os.makedirs(tmp_path)
+    
+    try:
+        os.makedirs(tmp_path, exist_ok=True)
+        # Import logger here to avoid circular imports
+        from qbitcoin.core.misc import logger
+        logger.info("Created data directory: %s", tmp_path)
+    except OSError as e:
+        # Import logger here to avoid circular imports
+        from qbitcoin.core.misc import logger
+        logger.error("Failed to create data directory %s: %s", tmp_path, str(e))
+        raise
+    
     if not copy_files:
         return
     for file in copy_files:
