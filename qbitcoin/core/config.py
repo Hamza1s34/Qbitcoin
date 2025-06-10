@@ -26,7 +26,7 @@ class UserConfig(object):
 
         self.genesis_prev_headerhash = b'The sleeper must awaken'
         self.genesis_timestamp = 1748476800  # Updated to current time (May 29, 2025)
-        self.genesis_difficulty = 1000  # Reduced from 10,000,000 to 1,000 for reasonable mining
+        self.genesis_difficulty = 5000 
 
         # Default configuration
         self.mining_enabled = False
