@@ -26,9 +26,9 @@ from qbitcoin.core import config
 
 # Constants
 NODE_GRPC_ENDPOINT = "localhost:19009"
-SHOR_PER_QUANTA = 10**9
+QUARK_PER_QBITCOIN = 10**9
 CONNECTION_TIMEOUT = 10
-TEST_AMOUNT = 100 * SHOR_PER_QUANTA  # 100 Quanta
+TEST_AMOUNT = 100 * QUARK_PER_QBITCOIN  # 100 Qbitcoin
 
 class TransactionTester:
     def __init__(self):
@@ -108,7 +108,7 @@ class TransactionTester:
         tx._data.public_key = sender['public_key']
         tx._data.transfer.addrs_to.append(bytes(hstr2bin(receiver_address[1:])))
         tx._data.transfer.amounts.append(amount)
-        tx._data.fee = 1000000  # 1M shor fee
+        tx._data.fee = 1000000  # 1M quark fee
         tx._data.master_addr = sender['address_bytes']
         
         tx_data = tx.get_data_hash()
@@ -226,7 +226,7 @@ class TransactionTester:
     def test_8_excessive_amount(self):
         """Test 8: Transaction with amount exceeding balance"""
         print("\n=== Test 8: Excessive Amount ===")
-        excessive_amount = 999999999 * SHOR_PER_QUANTA  # Very large amount
+        excessive_amount = 999999999 * QUARK_PER_QBITCOIN  # Very large amount
         tx = self.create_basic_transaction(self.genesis_keys, self.new_wallet['address'], excessive_amount)
         return self.send_transaction(tx, "Excessive Amount")
     
@@ -254,7 +254,7 @@ class TransactionTester:
         tx._data.public_key = self.genesis_keys['public_key']
         
         # Invalid address (wrong length)
-        invalid_address = b'\x01' + b'\x00' * 10  # Too short
+        invalid_address = b'\x01' + b'\x00' * 10  # Too quarkt
         tx._data.transfer.addrs_to.append(invalid_address)
         tx._data.transfer.amounts.append(TEST_AMOUNT)
         tx._data.fee = 1000000

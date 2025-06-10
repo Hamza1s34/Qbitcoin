@@ -84,17 +84,17 @@ def create_real_token():
     
     # Check genesis balance
     genesis_balance = get_address_balance(genesis_wallet['address'])
-    print(f"Genesis Balance: {genesis_balance / 1000000000:.3f} Quanta")
+    print(f"Genesis Balance: {genesis_balance / 1000000000:.3f} Qbitcoin")
     
-    if genesis_balance < 10000000000:  # Less than 10 Quanta
-        print("❌ Insufficient balance for token creation (need at least 10 Quanta)")
+    if genesis_balance < 10000000000:  # Less than 10 Qbitcoin
+        print("❌ Insufficient balance for token creation (need at least 10 Qbitcoin)")
         return None
     
     # Token parameters
     token_symbol = b'DEMO'
     token_name = b'Demo Token Real'
     decimals = 2
-    fee = 5000000000  # 5 Quanta fee
+    fee = 5000000000  # 5 Qbitcoin fee
     
     # Initial token distribution
     initial_balances = [
@@ -120,7 +120,7 @@ def create_real_token():
     print(f"  Name: {token_name.decode()}")
     print(f"  Decimals: {decimals}")
     print(f"  Total Supply: {total_supply / (10 ** decimals):,} tokens")
-    print(f"  Creation Fee: {fee / 1000000000} Quanta")
+    print(f"  Creation Fee: {fee / 1000000000} Qbitcoin")
     
     try:
         # Create the token transaction manually like create_transaction.py does

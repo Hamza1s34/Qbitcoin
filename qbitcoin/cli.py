@@ -76,8 +76,8 @@ def _serialize_output(ctx, addresses: List[OutputMessage], source_description) -
 
     for pos, item in enumerate(addresses):
         try:
-            balance_unshored = Decimal(_public_get_address_balance(ctx, item.qaddress)) / config.dev.shor_per_quanta
-            balance = '{:5.8f}'.format(balance_unshored)
+            balance_unquarked = Decimal(_public_get_address_balance(ctx, item.qaddress)) / config.dev.quark_per_qbitcoin
+            balance = '{:5.8f}'.format(balance_unquarked)
         except Exception as e:
             msg['error'] = str(e)
             balance = '?'
@@ -190,14 +190,14 @@ def _select_wallet(ctx, address_or_index):
         quit(1)
 
 
-def _quanta_to_shor(x: Decimal, base=Decimal(config.dev.shor_per_quanta)) -> int:
+def _qbitcoin_to_quark(x: Decimal, base=Decimal(config.dev.quark_per_qbitcoin)) -> int:
     return int(Decimal(x * base).to_integral_value())
 
 
 def _parse_dsts_amounts(addresses: str, amounts: str, token_decimals: int = 0, check_multi_sig_address=False):
     """
     'Qaddr1 Qaddr2...' -> [\\xcx3\\xc2, \\xc2d\\xc3]
-    '10 10' -> [10e9, 10e9] (in shor)
+    '10 10' -> [10e9, 10e9] (in quark)
     :param addresses:
     :param amounts:
     :return:
@@ -206,14 +206,14 @@ def _parse_dsts_amounts(addresses: str, amounts: str, token_decimals: int = 0, c
 
     if token_decimals != 0:
         multiplier = Decimal(10 ** int(token_decimals))
-        shor_amounts = [_quanta_to_shor(Decimal(amount), base=multiplier) for amount in amounts.split(' ')]
+        quark_amounts = [_qbitcoin_to_quark(Decimal(amount), base=multiplier) for amount in amounts.split(' ')]
     else:
-        shor_amounts = [_quanta_to_shor(Decimal(amount)) for amount in amounts.split(' ')]
+        quark_amounts = [_qbitcoin_to_quark(Decimal(amount)) for amount in amounts.split(' ')]
 
-    if len(addresses_split) != len(shor_amounts):
+    if len(addresses_split) != len(quark_amounts):
         raise Exception("dsts and amounts should be the same length")
 
-    return addresses_split, shor_amounts
+    return addresses_split, quark_amounts
 
 
 ########################
@@ -312,14 +312,14 @@ def balance(ctx, address):
             return
 
         # Get balance from node
-        balance_shor = _public_get_address_balance(ctx, address)
+        balance_quark = _public_get_address_balance(ctx, address)
         
-        # Convert from shor to Quanta
-        balance_quanta = Decimal(balance_shor) / config.dev.shor_per_quanta
+        # Convert from quark to Qbitcoin
+        balance_qbitcoin = Decimal(balance_quark) / config.dev.quark_per_qbitcoin
         
         # Display the balance
         click.echo(f"Address: {address}")
-        click.echo(f"Balance: {balance_quanta} Quanta ({balance_shor} shor)")
+        click.echo(f"Balance: {balance_qbitcoin} Qbitcoin ({balance_quark} quark)")
         
     except Exception as e:
         click.echo(f"Error retrieving balance: {e}")
@@ -467,7 +467,7 @@ def tx_push(ctx, txblob):
 @click.option('--master', type=str, default='', prompt=True, help='master QRL address')
 @click.option('--addr_to', type=str, default='', prompt=True, help='QRL Address receiving this message (optional)')
 @click.option('--message', type=str, prompt=True, help='Message (max 80 bytes)')
-@click.option('--fee', type=Decimal, default=0.0, prompt=True, help='fee in Quanta')
+@click.option('--fee', type=Decimal, default=0.0, prompt=True, help='fee in Qbitcoin')
 @click.pass_context
 def tx_message(ctx, src, master, addr_to, message, fee):
     """
@@ -490,7 +490,7 @@ def tx_message(ctx, src, master, addr_to, message, fee):
         master_addr = None
         if master:
             master_addr = parse_qaddress(master)
-        fee_shor = _quanta_to_shor(fee)
+        fee_quark = _qbitcoin_to_quark(fee)
     except Exception as e:
         click.echo("Error validating arguments: {}".format(e))
         quit(1)
@@ -499,7 +499,7 @@ def tx_message(ctx, src, master, addr_to, message, fee):
         stub = ctx.obj.get_stub_public_api()
         tx = MessageTransaction.create(message_hash=message,
                                        addr_to=addr_to,
-                                       fee=fee_shor,
+                                       fee=fee_quark,
                                        xmss_pk=address_src_pk,
                                        master_addr=master_addr)
         # Sign with Falcon-512
@@ -519,7 +519,7 @@ def tx_message(ctx, src, master, addr_to, message, fee):
 @click.option('--src', type=str, default='', prompt=True, help='source QRL address')
 @click.option('--master', type=str, default='', prompt=True, help='master QRL address')
 @click.option('--threshold', default=0, prompt=True, help='Threshold')
-@click.option('--fee', type=Decimal, default=0.0, prompt=True, help='fee in Quanta')
+@click.option('--fee', type=Decimal, default=0.0, prompt=True, help='fee in Qbitcoin')
 @click.option('--signature_index', default=1, prompt=True, help='Signature Index for Falcon-512')
 @click.pass_context
 def tx_multi_sig_create(ctx, src, master, threshold, fee, signature_index):
@@ -550,7 +550,7 @@ def tx_multi_sig_create(ctx, src, master, threshold, fee, signature_index):
         if master:
             master_addr = parse_qaddress(master)
         # FIXME: This could be problematic. Check
-        fee_shor = _quanta_to_shor(fee)
+        fee_quark = _qbitcoin_to_quark(fee)
 
     except KeyboardInterrupt:
         click.echo("Terminated by user")
@@ -564,7 +564,7 @@ def tx_multi_sig_create(ctx, src, master, threshold, fee, signature_index):
         tx = MultiSigCreate.create(signatories=signatories,
                                    weights=weights,
                                    threshold=threshold,
-                                   fee=fee_shor,
+                                   fee=fee_quark,
                                    xmss_pk=address_src_pk,
                                    master_addr=master_addr)
 
@@ -588,9 +588,9 @@ def tx_multi_sig_create(ctx, src, master, threshold, fee, signature_index):
 @click.option('--master', type=str, default='', help='master QRL address')
 @click.option('--multi_sig_address', type=str, default='', prompt=True, help='signer Multi Sig Address')
 @click.option('--dsts', type=str, prompt=True, help='List of destination addresses')
-@click.option('--amounts', type=str, prompt=True, help='List of amounts to transfer (Quanta)')
+@click.option('--amounts', type=str, prompt=True, help='List of amounts to transfer (Qbitcoin)')
 @click.option('--expiry_block_number', type=int, prompt=True, help='Expiry Blocknumber')
-@click.option('--fee', type=Decimal, default=0.0, prompt=True, help='fee in Quanta')
+@click.option('--fee', type=Decimal, default=0.0, prompt=True, help='fee in Qbitcoin')
 @click.option('--signature_index', default=1, help='Signature Index for Falcon-512')
 @click.pass_context
 def tx_multi_sig_spend(ctx, src, master, multi_sig_address, dsts, amounts, expiry_block_number, fee, signature_index):
@@ -601,8 +601,8 @@ def tx_multi_sig_spend(ctx, src, master, multi_sig_address, dsts, amounts, expir
     master_addr = None
 
     addresses_dst = []
-    shor_amounts = []
-    fee_shor = []
+    quark_amounts = []
+    fee_quark = []
 
     signing_object = None
 
@@ -629,8 +629,8 @@ def tx_multi_sig_spend(ctx, src, master, multi_sig_address, dsts, amounts, expir
         if master:
             master_addr = parse_qaddress(master)
 
-        addresses_dst, shor_amounts = _parse_dsts_amounts(dsts, amounts, check_multi_sig_address=True)
-        fee_shor = _quanta_to_shor(fee)
+        addresses_dst, quark_amounts = _parse_dsts_amounts(dsts, amounts, check_multi_sig_address=True)
+        fee_quark = _qbitcoin_to_quark(fee)
     except Exception as e:
         click.echo("Error validating arguments: {}".format(e))
         quit(1)
@@ -639,9 +639,9 @@ def tx_multi_sig_spend(ctx, src, master, multi_sig_address, dsts, amounts, expir
         # MultiSigSpend transaction
         tx = MultiSigSpend.create(multi_sig_address=multi_sig_address,
                                   addrs_to=addresses_dst,
-                                  amounts=shor_amounts,
+                                  amounts=quark_amounts,
                                   expiry_block_number=expiry_block_number,
-                                  fee=fee_shor,
+                                  fee=fee_quark,
                                   xmss_pk=address_src_pk,
                                   master_addr=master_addr)
 
@@ -699,8 +699,8 @@ def tx_transfer(ctx, src, master, dsts, amounts, message_data, fee):
     master_addr = None
 
     addresses_dst = []
-    shor_amounts = []
-    fee_shor = 0
+    quark_amounts = []
+    fee_quark = 0
 
     signing_object = None
     message_data = message_data.encode()
@@ -718,8 +718,8 @@ def tx_transfer(ctx, src, master, dsts, amounts, message_data, fee):
         # Get and validate other inputs
         if master:
             master_addr = parse_qaddress(master)
-        addresses_dst, shor_amounts = _parse_dsts_amounts(dsts, amounts, check_multi_sig_address=True)
-        fee_shor = _quanta_to_shor(fee)
+        addresses_dst, quark_amounts = _parse_dsts_amounts(dsts, amounts, check_multi_sig_address=True)
+        fee_quark = _qbitcoin_to_quark(fee)
     except Exception as e:
         click.echo("Error validating arguments: {}".format(e))
         quit(1)
@@ -727,9 +727,9 @@ def tx_transfer(ctx, src, master, dsts, amounts, message_data, fee):
     try:
         # Create transaction
         tx = TransferTransaction.create(addrs_to=addresses_dst,
-                                        amounts=shor_amounts,
+                                        amounts=quark_amounts,
                                         message_data=message_data,
-                                        fee=fee_shor,
+                                        fee=fee_quark,
                                         xmss_pk=address_src_pk,
                                         master_addr=master_addr)
 
@@ -770,7 +770,7 @@ def tx_transfer(ctx, src, master, dsts, amounts, message_data, fee):
 @click.option('--name', default='', prompt=True, help='Token Name')
 @click.option('--owner', default='', prompt=True, help='Owner QRL address')
 @click.option('--decimals', default=0, prompt=True, help='decimals')
-@click.option('--fee', type=Decimal, default=0.0, prompt=True, help='fee in Quanta')
+@click.option('--fee', type=Decimal, default=0.0, prompt=True, help='fee in Qbitcoin')
 @click.pass_context
 def tx_token(ctx, src, master, symbol, name, owner, decimals, fee):
     """
@@ -804,12 +804,12 @@ def tx_token(ctx, src, master, symbol, name, owner, decimals, fee):
         if master:
             master_addr = parse_qaddress(master)
         # FIXME: This could be problematic. Check
-        fee_shor = _quanta_to_shor(fee)
+        fee_quark = _qbitcoin_to_quark(fee)
 
         if len(name) > config.dev.max_token_name_length:
-            raise Exception("Token name must be shorter than {} chars".format(config.dev.max_token_name_length))
+            raise Exception("Token name must be quarkter than {} chars".format(config.dev.max_token_name_length))
         if len(symbol) > config.dev.max_token_symbol_length:
-            raise Exception("Token symbol must be shorter than {} chars".format(config.dev.max_token_symbol_length))
+            raise Exception("Token symbol must be quarkter than {} chars".format(config.dev.max_token_symbol_length))
 
     except KeyboardInterrupt:
         click.echo("Terminated by user")
@@ -825,7 +825,7 @@ def tx_token(ctx, src, master, symbol, name, owner, decimals, fee):
                                      owner=address_owner,
                                      decimals=decimals,
                                      initial_balances=initial_balances,
-                                     fee=fee_shor,
+                                     fee=fee_quark,
                                      xmss_pk=address_src_pk,
                                      master_addr=master_addr)
 
@@ -847,9 +847,9 @@ def tx_token(ctx, src, master, symbol, name, owner, decimals, fee):
 @click.option('--master', type=str, default='', prompt=True, help='master QRL address')
 @click.option('--token_txhash', default='', prompt=True, help='Token Txhash')
 @click.option('--dsts', type=str, prompt=True, help='List of destination addresses')
-@click.option('--amounts', type=str, prompt=True, help='List of amounts to transfer (Quanta)')
+@click.option('--amounts', type=str, prompt=True, help='List of amounts to transfer (Qbitcoin)')
 @click.option('--decimals', default=0, prompt=True, help='decimals')
-@click.option('--fee', type=Decimal, default=0.0, prompt=True, help='fee in Quanta')
+@click.option('--fee', type=Decimal, default=0.0, prompt=True, help='fee in Qbitcoin')
 @click.pass_context
 def tx_transfertoken(ctx, src, master, token_txhash, dsts, amounts, decimals, fee):
     """
@@ -861,13 +861,13 @@ def tx_transfertoken(ctx, src, master, token_txhash, dsts, amounts, decimals, fe
         quit(1)
 
     try:
-        addresses_dst, shor_amounts = _parse_dsts_amounts(dsts, amounts, token_decimals=decimals)
+        addresses_dst, quark_amounts = _parse_dsts_amounts(dsts, amounts, token_decimals=decimals)
         bin_token_txhash = parse_hexblob(token_txhash)
         master_addr = None
         if master:
             master_addr = parse_qaddress(master)
         # FIXME: This could be problematic. Check
-        fee_shor = _quanta_to_shor(fee)
+        fee_quark = _qbitcoin_to_quark(fee)
 
         _, src_falcon = _select_wallet(ctx, src)
         if not src_falcon:
@@ -887,8 +887,8 @@ def tx_transfertoken(ctx, src, master, token_txhash, dsts, amounts, decimals, fe
         stub = ctx.obj.get_stub_public_api()
         tx = TransferTokenTransaction.create(token_txhash=bin_token_txhash,
                                              addrs_to=addresses_dst,
-                                             amounts=shor_amounts,
-                                             fee=fee_shor,
+                                             amounts=quark_amounts,
+                                             fee=fee_quark,
                                              xmss_pk=address_src_pk,
                                              master_addr=master_addr)
         # Sign with Falcon-512
@@ -909,7 +909,7 @@ def tx_transfertoken(ctx, src, master, token_txhash, dsts, amounts, decimals, fe
 @click.option('--master', type=str, default='', prompt=True, help='master QRL address')
 @click.option('--number_of_slaves', default=0, type=int, prompt=True, help='Number of slaves addresses')
 @click.option('--access_type', default=0, type=int, prompt=True, help='0 - All Permission, 1 - Only Mining Permission')
-@click.option('--fee', type=Decimal, default=0.0, prompt=True, help='fee (Quanta)')
+@click.option('--fee', type=Decimal, default=0.0, prompt=True, help='fee (Qbitcoin)')
 @click.option('--pk', default=0, prompt=False, help='public key (when local wallet is missing)')
 @click.option('--signature_index', default=1, prompt=False, help='Signature Index for Falcon-512')
 @click.pass_context
@@ -929,7 +929,7 @@ def slave_tx_generate(ctx, src, master, number_of_slaves, access_type, fee, pk, 
         master_addr = None
         if master:
             master_addr = parse_qaddress(master)
-        fee_shor = _quanta_to_shor(fee)
+        fee_quark = _qbitcoin_to_quark(fee)
     except Exception as e:
         click.echo("Error validating arguments: {}".format(e))
         quit(1)
@@ -960,7 +960,7 @@ def slave_tx_generate(ctx, src, master, number_of_slaves, access_type, fee, pk, 
     try:
         tx = SlaveTransaction.create(slave_pks=slave_pks,
                                      access_types=access_types,
-                                     fee=fee_shor,
+                                     fee=fee_quark,
                                      xmss_pk=address_src_pk,
                                      master_addr=master_addr)
         

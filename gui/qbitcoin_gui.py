@@ -1876,7 +1876,7 @@ main()
                                 addr_bytes = bytes(hstr2bin(address[1:]))
                                 request = qbit_pb2.GetBalanceReq(address=addr_bytes)
                                 response = self.public_stub.GetBalance(request, timeout=5)
-                                balance = response.balance / 10**9  # Convert Shor to Quanta
+                                balance = response.balance / 10**9  # Convert quark to Qbitcoin
                                 total_balance += balance
                     except:
                         # If error, use 0 balance

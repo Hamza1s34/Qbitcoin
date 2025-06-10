@@ -71,7 +71,7 @@ def create_multisig_wallet(creator_wallet, signatories, weights, threshold, fee=
         signatories: List of signatory address bytes
         weights: List of weights for each signatory
         threshold: Minimum weight required to authorize transactions
-        fee: Transaction fee in shor (smallest unit)
+        fee: Transaction fee in quark (smallest unit)
     """
     print(f"\n=== Creating MultiSig Wallet ===")
     print(f"Creator: {creator_wallet['name']} ({creator_wallet['address']})")
@@ -120,15 +120,15 @@ def create_multisig_spend(proposer_wallet, multisig_address, destinations, amoun
         proposer_wallet: Wallet proposing the transaction (must be a signatory)
         multisig_address: MultiSig address bytes
         destinations: List of destination address bytes
-        amounts: List of amounts to send (in shor)
+        amounts: List of amounts to send (in quark)
         expiry_block: Block number when this proposal expires
-        fee: Transaction fee in shor
+        fee: Transaction fee in quark
     """
     print(f"\n=== Creating MultiSig Spend Proposal ===")
     print(f"Proposer: {proposer_wallet['name']} ({proposer_wallet['address']})")
     print(f"MultiSig Address: Q{bin2hstr(multisig_address)}")
     print(f"Destinations: {[f'Q{bin2hstr(addr)}' for addr in destinations]}")
-    print(f"Amounts: {amounts} shor")
+    print(f"Amounts: {amounts} quark")
     print(f"Expiry Block: {expiry_block}")
     
     # Create MultiSigSpend transaction
@@ -164,7 +164,7 @@ def create_multisig_vote(voter_wallet, spend_proposal_hash, vote_approve=True, f
         voter_wallet: Wallet voting (must be a signatory)
         spend_proposal_hash: Hash of the MultiSigSpend proposal
         vote_approve: True to approve, False to reject/unvote
-        fee: Transaction fee in shor
+        fee: Transaction fee in quark
     """
     print(f"\n=== Creating MultiSig Vote ===")
     print(f"Voter: {voter_wallet['name']} ({voter_wallet['address']})")
@@ -195,14 +195,14 @@ def create_multisig_vote(voter_wallet, spend_proposal_hash, vote_approve=True, f
     }
 
 
-def quanta_to_shor(quanta_amount):
-    """Convert Quanta to shor (smallest unit)"""
-    return int(Decimal(quanta_amount) * Decimal(config.dev.shor_per_quanta))
+def qbitcoin_to_quark(qbitcoin_amount):
+    """Convert Qbitcoin to quark (smallest unit)"""
+    return int(Decimal(qbitcoin_amount) * Decimal(config.dev.quark_per_qbitcoin))
 
 
-def shor_to_quanta(shor_amount):
-    """Convert shor to Quanta"""
-    return Decimal(shor_amount) / Decimal(config.dev.shor_per_quanta)
+def quark_to_qbitcoin(quark_amount):
+    """Convert quark to Qbitcoin"""
+    return Decimal(quark_amount) / Decimal(config.dev.quark_per_qbitcoin)
 
 
 def main():
@@ -227,21 +227,21 @@ def main():
         signatories=signatories,
         weights=weights,
         threshold=threshold,
-        fee=quanta_to_shor(0.001)  # 0.001 Quanta fee
+        fee=qbitcoin_to_quark(0.001)  # 0.001 Qbitcoin fee
     )
     
     # Step 3: Create a destination wallet for the transfer
     destination = create_falcon_wallet("Destination")
     
     # Step 4: Create a MultiSig spend proposal
-    # Alice proposes to send 10 Quanta to the destination
+    # Alice proposes to send 10 Qbitcoin to the destination
     spend_info = create_multisig_spend(
         proposer_wallet=alice,
         multisig_address=multisig_info['multisig_address'],
         destinations=[destination['address_bytes']],
-        amounts=[quanta_to_shor(10)],  # 10 Quanta
+        amounts=[qbitcoin_to_quark(10)],  # 10 Qbitcoin
         expiry_block=1000000,  # Expires at block 1,000,000
-        fee=quanta_to_shor(0.001)
+        fee=qbitcoin_to_quark(0.001)
     )
     
     # Step 5: Bob votes to approve the proposal
@@ -249,7 +249,7 @@ def main():
         voter_wallet=bob,
         spend_proposal_hash=spend_info['spend_hash'],
         vote_approve=True,
-        fee=quanta_to_shor(0.001)
+        fee=qbitcoin_to_quark(0.001)
     )
     
     # Step 6: Charlie also votes to approve
@@ -257,7 +257,7 @@ def main():
         voter_wallet=charlie,
         spend_proposal_hash=spend_info['spend_hash'],
         vote_approve=True,
-        fee=quanta_to_shor(0.001)
+        fee=qbitcoin_to_quark(0.001)
     )
     
     print("\n" + "=" * 60)
@@ -268,7 +268,7 @@ def main():
     print(f"   - Weights: Alice({weights[0]}), Bob({weights[1]}), Charlie({weights[2]})")
     print(f"   - Threshold: {threshold}")
     print(f"")
-    print(f"2. Alice proposed spend of 10 Quanta")
+    print(f"2. Alice proposed spend of 10 Qbitcoin")
     print(f"   - Proposal Hash: {bin2hstr(spend_info['spend_hash'])}")
     print(f"   - Destination: {destination['address']}")
     print(f"")

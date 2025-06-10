@@ -61,7 +61,7 @@ class UserConfig(object):
         self.chain_state_broadcast_period = 30
         # must be less than ping_timeout
 
-        self.transaction_minimum_fee = int(0 * dev.shor_per_quanta)
+        self.transaction_minimum_fee = int(0 * dev.quark_per_qbitcoin)
         self.transaction_pool_size = 25000
         self.pending_transaction_pool_size = 75000
         # 1% of the pending_transaction_pool will be reserved for moving stale txn
@@ -320,7 +320,7 @@ class DevConfig(object):
         # ======================================
         # SHOR PER QUANTA / MAX ALLOWED DECIMALS
         # ======================================
-        self.shor_per_quanta = decimal.Decimal(10 ** 9)
+        self.quark_per_qbitcoin = decimal.Decimal(10 ** 9)
 
         # ======================================
         # # FOUNDATION MULTI-SIG ADDRESSES

@@ -42,7 +42,7 @@ def get_address_details(address):
         state = get_address_state_resp.state
         
         print(f"📍 Address: {address}")
-        print(f"   QRL Balance: {state.balance / 1000000000:,.6f} Quanta")
+        print(f"   QRL Balance: {state.balance / 1000000000:,.6f} Qbitcoin")
         print(f"   Nonce: {state.nonce}")
         print(f"   OTS Key Index: {state.ots_bitfield_used_page}")
         print(f"   Tokens Owned: {len(state.tokens)}")
@@ -77,7 +77,7 @@ def get_transaction_details(tx_hash):
             print(f"   Block Number: {get_transaction_resp.block_number}")
             print(f"   Block Hash: {bin2hstr(get_transaction_resp.block_hash)}")
             print(f"   Confirmations: {get_transaction_resp.confirmations}")
-            print(f"   Fee: {tx.fee / 1000000000:,.6f} Quanta")
+            print(f"   Fee: {tx.fee / 1000000000:,.6f} Qbitcoin")
             print(f"   From: Q{bin2hstr(tx.master_addr)}")
             
             # Check transaction type
@@ -119,9 +119,9 @@ def get_transaction_details(tx_hash):
                 for i, (addr, amount) in enumerate(zip(tx.transfer.addrs_to, tx.transfer.amounts)):
                     recipient = f"Q{bin2hstr(addr)}"
                     total_sent += amount
-                    print(f"     {i+1}. {recipient}: {amount / 1000000000:,.6f} Quanta")
+                    print(f"     {i+1}. {recipient}: {amount / 1000000000:,.6f} Qbitcoin")
                 
-                print(f"   Total Sent: {total_sent / 1000000000:,.6f} Quanta")
+                print(f"   Total Sent: {total_sent / 1000000000:,.6f} Qbitcoin")
             
             return tx
         else:
@@ -189,7 +189,7 @@ def show_transfer_info():
         print(f"   From: {transfer_info['from_address']}")
         print(f"   To: {transfer_info['to_address']}")
         print(f"   Amount: {transfer_info['display_amount']:,} {transfer_info['symbol']}")
-        print(f"   Fee: {transfer_info['fee'] / 1000000000} Quanta")
+        print(f"   Fee: {transfer_info['fee'] / 1000000000} Qbitcoin")
         print(f"   Transfer ID: {transfer_info['transfer_txhash']}")
         print()
         

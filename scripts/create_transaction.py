@@ -22,7 +22,7 @@ from qbitcoin.core import config
 
 # Constants
 NODE_GRPC_ENDPOINT = "localhost:19009"  # Default QRL gRPC endpoint
-SHOR_PER_QUANTA = 10**9  # 1 Quanta = 10^9 Shor (smallest unit)
+QUARK_PER_QBITCOIN = 10**9  # 1 Qbitcoin = 10^9 quark (smallest unit)
 CONNECTION_TIMEOUT = 5  # seconds
 
 def load_genesis_keys(file_path):
@@ -65,9 +65,9 @@ def create_new_wallet():
         'private_key': private_key
     }
 
-def create_and_sign_transaction(sender, receiver_address, amount_shor):
+def create_and_sign_transaction(sender, receiver_address, amount_quark):
     """Create and sign a transfer transaction"""
-    print(f"Creating transaction: {sender['address']} -> {receiver_address} ({amount_shor} shor)")
+    print(f"Creating transaction: {sender['address']} -> {receiver_address} ({amount_quark} quark)")
     
     # We need to manually handle the transaction since the addr_from is derived incorrectly
     tx = TransferTransaction()
@@ -77,10 +77,10 @@ def create_and_sign_transaction(sender, receiver_address, amount_shor):
     tx._data.transfer.addrs_to.append(bytes(hstr2bin(receiver_address[1:])))
     
     # Add amount
-    tx._data.transfer.amounts.append(amount_shor)
+    tx._data.transfer.amounts.append(amount_quark)
     
     # Set fee
-    tx._data.fee = 1000000  # 1 million shor fee
+    tx._data.fee = 1000000  # 1 million quark fee
     
     # Important: Override the default Transaction behavior by directly setting addr_from
     # This bypasses the QRLHelper.getAddress() call that fails with Falcon keys
@@ -174,8 +174,8 @@ def main():
         new_wallet = create_new_wallet()
         print(f"New wallet public key length: {len(new_wallet['public_key'])} bytes")
         
-        # Amount to send (in shor)
-        amount_to_send = 1000 * SHOR_PER_QUANTA  # 1000 Quanta
+        # Amount to send (in quark)
+        amount_to_send = 1000 * QUARK_PER_QBITCOIN  # 1000 Qbitcoin
         
         # Create and sign a transaction
         tx = create_and_sign_transaction(genesis_keys, new_wallet['address'], amount_to_send)
@@ -185,7 +185,7 @@ def main():
         success = send_transaction(tx)
         
         if success:
-            print(f"\nSuccessfully sent {amount_to_send/SHOR_PER_QUANTA} Quanta from genesis address")
+            print(f"\nSuccessfully sent {amount_to_send/QUARK_PER_QBITCOIN} Qbitcoin from genesis address")
             print(f"Source address: {genesis_keys['address']}")
             print(f"Destination address: {new_wallet['address']}")
             

@@ -18,7 +18,7 @@ def get_initial_block_reward(dev_config: DevConfig) -> Decimal:
     """
     Return the initial block reward: 2.5 Qbitcoin = 2.5 * 10^9 Quark
     """
-    return Decimal('2.5') * dev_config.shor_per_quanta
+    return Decimal('2.5') * dev_config.quark_per_qbitcoin
 
 
 def remaining_emission(block_n, dev_config: DevConfig) -> Decimal:
@@ -29,7 +29,7 @@ def remaining_emission(block_n, dev_config: DevConfig) -> Decimal:
     Halving every 2 years (1,051,200 blocks)
     """
     if block_n <= 0:
-        return dev_config.coin_remaining_at_genesis * dev_config.shor_per_quanta
+        return dev_config.coin_remaining_at_genesis * dev_config.quark_per_qbitcoin
     
     halving_interval = get_halving_interval(dev_config)
     initial_reward = get_initial_block_reward(dev_config)
@@ -48,7 +48,7 @@ def remaining_emission(block_n, dev_config: DevConfig) -> Decimal:
         blocks_processed += blocks_in_period
         current_reward = current_reward / 2  # Halve the reward
     
-    remaining = dev_config.coin_remaining_at_genesis * dev_config.shor_per_quanta - total_mined
+    remaining = dev_config.coin_remaining_at_genesis * dev_config.quark_per_qbitcoin - total_mined
     return remaining.quantize(Decimal('1.'), rounding=decimal.ROUND_DOWN)
 
 

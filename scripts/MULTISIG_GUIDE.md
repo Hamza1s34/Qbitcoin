@@ -63,7 +63,7 @@ python3 qbitcoin/cli.py tx_multi_sig_create \
   --src "Q010300a1f9dc35..." \    # Alice's address (creator)
   --master "" \                    # Optional master address
   --threshold 60 \                 # Minimum weight needed
-  --fee 0.001                      # Fee in Quanta
+  --fee 0.001                      # Fee in Qbitcoin
 ```
 
 When prompted, enter signatory addresses and weights:
@@ -85,7 +85,7 @@ Send funds to the multisig address using regular transfer:
 python3 qbitcoin/cli.py tx_transfer \
   --src "Q010300a1f9dc35..." \     # Your funded wallet
   --dsts "Q110000abc123..." \      # MultiSig address  
-  --amounts "100" \                # Amount in Quanta
+  --amounts "100" \                # Amount in Qbitcoin
   --fee 0.001
 ```
 
