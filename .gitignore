@@ -124,3 +124,6 @@ github_token.txt
 *.conf
 node_modules/
 .npm/
+
+# PyPI configuration (contains sensitive tokens)
+.pypirc

@@ -1,0 +1,76 @@
+name: Auto-Publish on Commit
+
+on:
+  push:
+    branches: [ main, master ]
+    paths-ignore:
+      - 'README.md'
+      - 'docs/**'
+      - '.github/**'
+      - '*.md'
+
+jobs:
+  auto-publish:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
+    
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.11'
+    
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install build twine setuptools wheel
+    
+    - name: Generate timestamp-based version
+      run: |
+        # Get current version from pyproject.toml
+        CURRENT_VERSION=$(grep -oP 'version = "\K[^"]+' pyproject.toml)
+        echo "Current version: $CURRENT_VERSION"
+        
+        # Generate new version with timestamp
+        TIMESTAMP=$(date +%Y%m%d%H%M%S)
+        COMMIT_SHORT=$(git rev-parse --short HEAD)
+        
+        # Split current version
+        IFS='.' read -ra VERSION_PARTS <<< "$CURRENT_VERSION"
+        MAJOR=${VERSION_PARTS[0]}
+        MINOR=${VERSION_PARTS[1]}
+        
+        # Create new version: MAJOR.MINOR.TIMESTAMP
+        NEW_VERSION="$MAJOR.$MINOR.$TIMESTAMP"
+        
+        echo "New version: $NEW_VERSION"
+        
+        # Update version in pyproject.toml
+        sed -i "s/version = \"$CURRENT_VERSION\"/version = \"$NEW_VERSION\"/" pyproject.toml
+        
+        echo "NEW_VERSION=$NEW_VERSION" >> $GITHUB_ENV
+    
+    - name: Build package
+      run: python -m build
+    
+    - name: Check package
+      run: twine check dist/*
+    
+    - name: Publish to PyPI
+      env:
+        TWINE_USERNAME: __token__
+        TWINE_PASSWORD: ${{ secrets.PYPI_API_TOKEN }}
+      run: twine upload dist/*
+    
+    - name: Commit version update
+      run: |
+        git config --local user.email "action@github.com"
+        git config --local user.name "GitHub Action"
+        git add pyproject.toml
+        git commit -m "Auto-update version to $NEW_VERSION [skip ci]" || exit 0
+        git push
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
