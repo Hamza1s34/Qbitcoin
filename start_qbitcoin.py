@@ -18,4 +18,9 @@ DependencyChecker.check()
 
 from qbitcoin.main import main  # noqa
 
-main()
+def main_entry():
+    """Entry point for qbitcoin-node command"""
+    main()
+
+if __name__ == "__main__":
+    main_entry()

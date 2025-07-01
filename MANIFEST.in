@@ -1,0 +1,14 @@
+include README.md
+include LICENSE
+include requirements.txt
+include start_qbitcoin.py
+recursive-include qbitcoin *.py *.yml *.yaml *.proto
+recursive-include docs *.md
+recursive-include scripts *.py *.md
+recursive-include gui *.py
+exclude tests/*
+exclude .git*
+exclude .pytest_cache
+exclude __pycache__
+recursive-exclude * __pycache__
+recursive-exclude * *.py[co]

@@ -26,6 +26,19 @@ A Python-based cryptocurrency implementation with quantum-resistant features.
 
 ## Installation
 
+## 1 using pip 
+
+```bash
+pip install qbitcoin
+```
+
+For mining 
+ ```bash
+qbitcoin --miningAddress <your qbitcoin address>
+```
+
+if you want to run directly 
+
 1. Clone the repository:
 ```bash
 git clone https://github.com/Hamza1s34/Qbitcoin.git
