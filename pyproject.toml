@@ -4,12 +4,12 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "qbitcoin"
-version = "1.0.1"
+version = "1.0.3"
 description = "A Python-based cryptocurrency implementation with quantum-resistant features"
 readme = "README.md"
 license = {text = "MIT"}
 authors = [
-    {name = "qbitcoin", email = "qbitcoin@example.com"}
+    {name = "Hamza", email = "hamza@qbitcoin.dev"}
 ]
 keywords = ["cryptocurrency", "blockchain", "quantum-resistant", "falcon", "post-quantum"]
 classifiers = [
@@ -28,16 +28,16 @@ classifiers = [
 ]
 requires-python = ">=3.8"
 dependencies = [
-    "plyvel",
-    "ntplib",
-    "Twisted",
-    "colorlog",
-    "simplejson",
-    "PyYAML",
-    "grpcio-tools",
-    "grpcio",
-    "google-api-python-client",
-    "google-auth",
+    "plyvel>=1.5.0",
+    "ntplib>=0.4.0",
+    "Twisted>=22.0.0",
+    "colorlog>=6.0.0",
+    "simplejson>=3.17.0",
+    "PyYAML>=6.0",
+    "grpcio-tools>=1.50.0",
+    "grpcio>=1.50.0",
+    "google-api-python-client>=2.70.0",
+    "google-auth>=2.0.0",
     "httplib2",
     "service_identity",
     "protobuf",
