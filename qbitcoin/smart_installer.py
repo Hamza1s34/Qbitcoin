@@ -126,9 +126,11 @@ typedef unsigned long long uint64_t;
             'libboost-system-dev', 'libboost-thread-dev', 'libboost-chrono-dev',
             'libboost-program-options-dev', 'libboost-test-dev', 'libboost-filesystem-dev',
             'libeigen3-dev', 'libsodium-dev', 'libhwloc-dev',
+            # Additional boost components that might be needed
+            'libboost-regex-dev', 'libboost-date-time-dev', 'libboost-atomic-dev',
             # Compilation tools
             'gcc-multilib', 'g++-multilib', 'libc6-dev', 'linux-libc-dev',
-            'wget', 'curl', 'unzip', 'tar', 'gzip'
+            'wget', 'curl', 'unzip', 'tar', 'gzip', 'swig', 'swig4.0'
         ]
         
         if self.distro == 'debian':
@@ -292,17 +294,12 @@ typedef unsigned long long uint64_t;
         for lib_name, repo in quantum_libs.items():
             print(f"🔄 Processing {lib_name}...")
             
-            # Try pip install first (fast)
-            if self.run_command(f'pip install "{lib_name}"', silent=True):
-                print(f"✅ {lib_name} installed via pip")
-                continue
-            
-            # If pip fails, try from source with patches
-            print(f"⚙️  pip failed, trying source compilation for {lib_name}...")
-            if self.install_quantum_library_from_source(lib_name, repo):
-                print(f"✅ {lib_name} compiled from source successfully!")
+            # Use advanced fallback installation method
+            if self.install_with_fallback_compilation(lib_name):
+                print(f"✅ {lib_name} installation successful!")
             else:
                 print(f"⚠️  {lib_name} installation failed - mining features may be limited")
+                # Continue with installation anyway
         
         return True
     
@@ -392,12 +389,31 @@ typedef unsigned long long uint64_t;
         
         # Find all C++ source and header files
         cpp_extensions = ['.cpp', '.cxx', '.cc', '.c', '.hpp', '.h', '.hxx']
+        cmake_files = []
         files_to_patch = []
         
         for root, dirs, files in os.walk(source_dir):
             for file in files:
-                if any(file.endswith(ext) for ext in cpp_extensions):
-                    files_to_patch.append(os.path.join(root, file))
+                file_path = os.path.join(root, file)
+                if file.lower() == 'cmakelists.txt':
+                    cmake_files.append(file_path)
+                elif any(file.endswith(ext) for ext in cpp_extensions):
+                    files_to_patch.append(file_path)
+        
+        # Patch CMakeLists.txt files first
+        for cmake_file in cmake_files:
+            try:
+                with open(cmake_file, 'r', encoding='utf-8', errors='ignore') as f:
+                    content = f.read()
+                
+                if library_name in ['pyqryptonight', 'pyqrandomx']:
+                    content = self.apply_cmake_boost_fixes(content)
+                
+                with open(cmake_file, 'w', encoding='utf-8') as f:
+                    f.write(content)
+                print(f"✅ Patched CMakeLists.txt: {cmake_file}")
+            except Exception as e:
+                print(f"⚠️  Could not patch {cmake_file}: {e}")
         
         patches_applied = 0
         for file_path in files_to_patch:
@@ -441,14 +457,18 @@ typedef unsigned long long uint64_t;
                 print(f"⚠️  Could not patch {file_path}: {e}")
         
         print(f"✅ Patched {patches_applied} files in {library_name}")
-        return patches_applied > 0
+        return patches_applied > 0 or len(cmake_files) > 0
     
     def apply_pyqrllib_fixes(self, content):
         """Apply specific fixes for pyqrllib"""
+        # Add cstdint include at the very top for dilithium
+        if 'dilithium' in content.lower() and '#include <cstdint>' not in content:
+            content = '#include <cstdint>\n' + content
+        
         # Fix dilithium issues
         content = re.sub(
             r'(#include\s+[<"][^>"]*dilithium[^>"]*[>"])',
-            r'\1\n#include <cstdint>\n#include <cstring>',
+            r'#include <cstdint>\n\1\n#include <cstring>',
             content
         )
         
@@ -456,6 +476,10 @@ typedef unsigned long long uint64_t;
         if 'uint8_t' in content and '#include <cstdint>' not in content:
             content = '#include <cstdint>\n' + content
         
+        # Fix vector includes
+        if 'std::vector' in content and '#include <vector>' not in content:
+            content = '#include <vector>\n' + content
+            
         return content
     
     def apply_pyqryptonight_fixes(self, content):
@@ -470,6 +494,18 @@ typedef unsigned long long uint64_t;
 """
         if 'boost' in content.lower() and '#include <boost' not in content:
             content = boost_includes + content
+        
+        # Fix CMakeLists.txt boost issues
+        if 'CMakeLists.txt' in str(content) or 'find_package(Boost' in content:
+            content = content.replace(
+                'find_package(Boost',
+                'set(Boost_USE_STATIC_LIBS OFF)\nset(Boost_USE_MULTITHREADED ON)\nset(Boost_USE_STATIC_RUNTIME OFF)\nfind_package(Boost'
+            )
+            # Add fallback boost paths
+            content = content.replace(
+                'find_package(Boost',
+                'set(BOOST_ROOT /usr)\nset(BOOST_INCLUDEDIR /usr/include)\nset(BOOST_LIBRARYDIR /usr/lib/x86_64-linux-gnu)\nfind_package(Boost'
+            )
         
         return content
     
@@ -486,6 +522,48 @@ typedef unsigned long long uint64_t;
 """
         if 'randomx' in content.lower() and 'RANDOMX_MINING_SUPPORT' not in content:
             content = randomx_fixes + content
+        
+        # Fix CMakeLists.txt boost issues for RandomX too
+        if 'CMakeLists.txt' in str(content) or 'find_package(Boost' in content:
+            content = content.replace(
+                'find_package(Boost',
+                'set(Boost_USE_STATIC_LIBS OFF)\nset(Boost_USE_MULTITHREADED ON)\nset(Boost_USE_STATIC_RUNTIME OFF)\nfind_package(Boost'
+            )
+            # Add fallback boost paths
+            content = content.replace(
+                'find_package(Boost',
+                'set(BOOST_ROOT /usr)\nset(BOOST_INCLUDEDIR /usr/include)\nset(BOOST_LIBRARYDIR /usr/lib/x86_64-linux-gnu)\nfind_package(Boost'
+            )
+        
+        return content
+    
+    def apply_cmake_boost_fixes(self, content):
+        """Apply CMake fixes for Boost library detection"""
+        # Add boost configuration before find_package
+        boost_config = '''
+# Boost configuration for mining support
+set(Boost_USE_STATIC_LIBS OFF)
+set(Boost_USE_MULTITHREADED ON)
+set(Boost_USE_STATIC_RUNTIME OFF)
+set(BOOST_ROOT /usr)
+set(BOOST_INCLUDEDIR /usr/include)
+set(BOOST_LIBRARYDIR /usr/lib/x86_64-linux-gnu)
+set(Boost_NO_BOOST_CMAKE ON)
+'''
+        
+        # Insert boost config before first find_package(Boost
+        if 'find_package(Boost' in content or 'FIND_PACKAGE(Boost' in content:
+            lines = content.split('\n')
+            new_lines = []
+            boost_config_added = False
+            
+            for line in lines:
+                if ('find_package(Boost' in line or 'FIND_PACKAGE(Boost' in line) and not boost_config_added:
+                    new_lines.append(boost_config)
+                    boost_config_added = True
+                new_lines.append(line)
+            
+            content = '\n'.join(new_lines)
         
         return content
     
@@ -593,6 +671,56 @@ setup(
         
         # Compile and install
         return self.compile_quantum_library(library_name, source_dir, github_repo)
+    
+    def install_with_fallback_compilation(self, lib_name):
+        """Install quantum library with multiple fallback compilation strategies"""
+        print(f"🔬 Attempting advanced installation for {lib_name}...")
+        
+        # Strategy 1: Try pip first for known working versions
+        known_versions = {
+            'pyqrllib': '1.2.3',
+            'pyqryptonight': '0.99.11', 
+            'pyqrandomx': '0.3.2'
+        }
+        
+        if lib_name in known_versions:
+            version = known_versions[lib_name]
+            print(f"📦 Trying pip install {lib_name}=={version}...")
+            if self.run_command(f'pip install "{lib_name}=={version}" --no-cache-dir', silent=True):
+                print(f"✅ {lib_name} installed via pip")
+                return True
+        
+        # Strategy 2: Try without version constraint
+        print(f"📦 Trying pip install {lib_name} without version...")
+        if self.run_command(f'pip install "{lib_name}" --no-cache-dir', silent=True):
+            print(f"✅ {lib_name} installed via pip")
+            return True
+        
+        # Strategy 3: Try with --no-build-isolation
+        print(f"📦 Trying pip install {lib_name} with --no-build-isolation...")
+        if self.run_command(f'pip install "{lib_name}" --no-build-isolation --no-cache-dir', silent=True):
+            print(f"✅ {lib_name} installed via pip")
+            return True
+        
+        # Strategy 4: Install minimal dependencies then retry
+        print(f"🔧 Installing build dependencies for {lib_name}...")
+        self.run_command('pip install pybind11 cmake setuptools-scm', silent=True)
+        if self.run_command(f'pip install "{lib_name}" --no-cache-dir', silent=True):
+            print(f"✅ {lib_name} installed via pip after dependencies")
+            return True
+            
+        # Strategy 5: Try source compilation with patches (original method)
+        github_repos = {
+            'pyqrllib': 'theQRL/pyqrllib',
+            'pyqryptonight': 'davebaird/pyqryptonight', 
+            'pyqrandomx': 'monero-ecosystem/pyqrandomx'
+        }
+        
+        if lib_name in github_repos:
+            print(f"⚙️  Trying source compilation for {lib_name}...")
+            return self.install_quantum_library_from_source(lib_name, github_repos[lib_name])
+        
+        return False
     
     def cleanup(self):
         """Clean up temporary files"""
