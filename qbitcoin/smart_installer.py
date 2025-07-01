@@ -130,7 +130,7 @@ typedef unsigned long long uint64_t;
             'libboost-regex-dev', 'libboost-date-time-dev', 'libboost-atomic-dev',
             # Compilation tools
             'gcc-multilib', 'g++-multilib', 'libc6-dev', 'linux-libc-dev',
-            'wget', 'curl', 'unzip', 'tar', 'gzip', 'swig', 'swig4.0'
+            'wget', 'curl', 'unzip', 'tar', 'gzip', 'swig'
         ]
         
         if self.distro == 'debian':
