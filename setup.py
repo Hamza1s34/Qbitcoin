@@ -12,16 +12,42 @@ class PostInstallCommand(install):
     def run(self):
         install.run(self)
         
-        # Run smart installer after installation
+        # Run smart installer for quantum libraries after basic installation
         try:
-            print("🔧 Running Qbitcoin smart installer...")
+            print("� Running Qbitcoin smart installer for quantum libraries...")
+            print("📋 This will install: pyqrllib, pyqryptonight, pyqrandomx")
+            print("⏳ This may take a few minutes for compilation...")
+            
+            # Import and run smart installer
             from qbitcoin.smart_installer import SmartInstaller
             installer = SmartInstaller()
-            installer.install_python_deps_safely()
+            
+            # Only install the quantum libraries, basic deps are already installed
+            quantum_libs = {
+                'pyqrllib': 'theQRL/pyqrllib',
+                'pyqryptonight': 'davebaird/pyqryptonight', 
+                'pyqrandomx': 'monero-ecosystem/pyqrandomx'
+            }
+            
+            print("🧬 Installing quantum-resistant libraries with mining support...")
+            for lib_name, repo in quantum_libs.items():
+                print(f"🔄 Processing {lib_name}...")
+                
+                if installer.install_with_fallback_compilation(lib_name):
+                    print(f"✅ {lib_name} installation successful!")
+                else:
+                    print(f"⚠️  {lib_name} installation failed - mining features may be limited")
+            
             print("✅ Smart installation completed!")
+            print("💡 If quantum libraries failed, you can manually run: python -m qbitcoin.smart_installer")
+            
         except Exception as e:
-            print(f"⚠️  Smart installer had issues: {e}")
-            print("💡 You can manually run: python -m qbitcoin.smart_installer")
+            print(f"⚠️  Smart installer encountered issues: {e}")
+            print("💡 You can manually install quantum libraries by running:")
+            print("   python -m qbitcoin.smart_installer")
+            print("🔧 Or install individual libraries with:")
+            print("   pip install pyqrllib pyqryptonight pyqrandomx")
+            # Don't fail the entire installation for quantum library issues
 
 
 # Read the contents of README file
@@ -56,10 +82,13 @@ basic_requirements = [
     'daemonize>=2.5.0',
 ]
 
-# Optional quantum libraries (may fail to install)
+# Basic quantum library that usually works
 quantum_requirements = [
     'pqcrypto>=0.3.0; platform_machine=="x86_64"',
 ]
+
+# Note: Advanced quantum libraries (pyqrllib, pyqryptonight, pyqrandomx) 
+# are installed separately by the smart installer to handle compilation issues
 
 setup(
     name='qbitcoin',
@@ -93,10 +122,11 @@ setup(
     python_requires='>=3.8',
     install_requires=basic_requirements + quantum_requirements,
     extras_require={
-        'quantum': [
-            'pyqrllib>=1.2.3',
-            'pyqryptonight>=0.99.0', 
-            'pyqrandomx>=0.3.0',
+        'quantum-full': [
+            # Note: These require compilation and are better installed via smart installer
+            # 'pyqrllib>=1.2.3',
+            # 'pyqryptonight>=0.99.0', 
+            # 'pyqrandomx>=0.3.0',
         ],
         'dev': [
             'pytest>=7.0.0',

@@ -14,9 +14,8 @@ import tempfile
 import urllib.request
 import zipfile
 import tarfile
-import re
-import glob
-from pathlib import Path
+import re 
+
 
 
 class SmartInstaller:
@@ -740,6 +739,39 @@ def main():
     """Entry point for smart installation"""
     installer = SmartInstaller()
     return installer.install()
+
+
+def main_quantum_only():
+    """Entry point for installing only quantum libraries"""
+    print("🚀 Qbitcoin Quantum Libraries Installer")
+    print("=" * 50)
+    
+    installer = SmartInstaller()
+    try:
+        # Install quantum libraries only
+        quantum_libs = {
+            'pyqrllib': 'theQRL/pyqrllib',
+            'pyqryptonight': 'davebaird/pyqryptonight', 
+            'pyqrandomx': 'monero-ecosystem/pyqrandomx'
+        }
+        
+        print("🧬 Installing quantum-resistant libraries...")
+        for lib_name, repo in quantum_libs.items():
+            print(f"🔄 Processing {lib_name}...")
+            
+            if installer.install_with_fallback_compilation(lib_name):
+                print(f"✅ {lib_name} installation successful!")
+            else:
+                print(f"⚠️  {lib_name} installation failed")
+        
+        print("✅ Quantum libraries installation completed!")
+        return True
+        
+    except Exception as e:
+        print(f"❌ Installation failed: {e}")
+        return False
+    finally:
+        installer.cleanup()
 
 
 if __name__ == '__main__':

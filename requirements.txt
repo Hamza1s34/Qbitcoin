@@ -15,9 +15,10 @@ pyopenssl
 six
 click
 pqcrypto
-pyqrllib==1.2.3
-pyqryptonight
-pyqrandomx
+# Advanced quantum libraries installed by smart installer:
+# pyqrllib==1.2.3
+# pyqryptonight
+# pyqrandomx
 Flask
 json-rpc
 idna

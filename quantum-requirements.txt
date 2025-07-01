@@ -1,0 +1,13 @@
+# Quantum-resistant cryptography libraries for Qbitcoin
+# These require compilation and are best installed via the smart installer
+# Run: python -m qbitcoin.smart_installer
+
+# Post-quantum cryptography signatures and encryption
+pyqrllib==1.2.3
+
+# Quantum-resistant mining algorithms
+pyqryptonight>=0.99.0
+pyqrandomx>=0.3.0
+
+# Note: The smart installer will handle system dependencies, 
+# source patching, and compilation for these libraries automatically.
