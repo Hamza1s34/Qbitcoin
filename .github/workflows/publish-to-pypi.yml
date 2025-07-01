@@ -8,6 +8,9 @@ on:
   # Allow manual trigger
   workflow_dispatch:
 
+permissions:
+  contents: write
+
 jobs:
   build-and-publish:
     runs-on: ubuntu-latest
@@ -71,14 +74,29 @@ jobs:
       run: |
         git config --local user.email "action@github.com"
         git config --local user.name "GitHub Action"
+        
+        # Check if there are changes to commit
+        if git diff --quiet pyproject.toml; then
+          echo "No version changes to commit"
+          exit 0
+        fi
+        
         git add pyproject.toml
-        git commit -m "Auto-increment version to $NEW_VERSION [skip ci]" || exit 0
-        git push origin HEAD:${{ github.ref_name }}
+        git commit -m "Auto-increment version to $NEW_VERSION [skip ci]"
+        
+        # Try to push, but don't fail if it doesn't work
+        if ! git push origin HEAD:${{ github.ref_name }}; then
+          echo "⚠️ Could not push version update - continuing anyway"
+        fi
     
     - name: Create Git tag
       if: github.event_name == 'push'
       run: |
         git tag "v$NEW_VERSION"
-        git push origin "v$NEW_VERSION"
+        
+        # Try to push tag, but don't fail if it doesn't work
+        if ! git push origin "v$NEW_VERSION"; then
+          echo "⚠️ Could not push tag - continuing anyway"
+        fi
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

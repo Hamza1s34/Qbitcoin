@@ -9,6 +9,9 @@ on:
       - '.github/**'
       - '*.md'
 
+permissions:
+  contents: write
+  
 jobs:
   auto-publish:
     runs-on: ubuntu-latest
@@ -17,6 +20,7 @@ jobs:
     - uses: actions/checkout@v4
       with:
         fetch-depth: 0
+        token: ${{ secrets.GITHUB_TOKEN }}
     
     - name: Set up Python
       uses: actions/setup-python@v4
@@ -26,9 +30,10 @@ jobs:
     - name: Install dependencies
       run: |
         python -m pip install --upgrade pip
-        pip install build twine setuptools wheel pybind11 cmake
+        pip install build twine setuptools wheel
         
-        # Install system dependencies for compilation
+    - name: Install system dependencies
+      run: |
         sudo apt-get update
         sudo apt-get install -y \
           build-essential cmake pkg-config libssl-dev libffi-dev python3-dev git \
@@ -36,25 +41,28 @@ jobs:
           libboost-system-dev libboost-thread-dev libboost-chrono-dev \
           libboost-program-options-dev libboost-test-dev libboost-filesystem-dev \
           libeigen3-dev libsodium-dev libhwloc-dev gcc-multilib g++-multilib \
-          libc6-dev linux-libc-dev wget curl unzip tar gzip
+          libc6-dev linux-libc-dev wget curl unzip tar gzip swig
+          
+    - name: Run Smart Installer
+      run: |
+        echo "🚀 Running Qbitcoin Smart Installer..."
+        python test_smart_installer.py
     
-    - name: Generate timestamp-based version
+    - name: Generate incremental version
       run: |
         # Get current version from pyproject.toml
         CURRENT_VERSION=$(grep -oP 'version = "\K[^"]+' pyproject.toml)
         echo "Current version: $CURRENT_VERSION"
         
-        # Generate new version with timestamp
-        TIMESTAMP=$(date +%Y%m%d%H%M%S)
-        COMMIT_SHORT=$(git rev-parse --short HEAD)
-        
-        # Split current version
+        # Split current version and increment patch
         IFS='.' read -ra VERSION_PARTS <<< "$CURRENT_VERSION"
         MAJOR=${VERSION_PARTS[0]}
         MINOR=${VERSION_PARTS[1]}
+        PATCH=${VERSION_PARTS[2]:-0}
         
-        # Create new version: MAJOR.MINOR.TIMESTAMP
-        NEW_VERSION="$MAJOR.$MINOR.$TIMESTAMP"
+        # Increment patch version
+        NEW_PATCH=$((PATCH + 1))
+        NEW_VERSION="$MAJOR.$MINOR.$NEW_PATCH"
         
         echo "New version: $NEW_VERSION"
         
@@ -79,8 +87,19 @@ jobs:
       run: |
         git config --local user.email "action@github.com"
         git config --local user.name "GitHub Action"
+        
+        # Check if there are changes to commit
+        if git diff --quiet pyproject.toml; then
+          echo "No version changes to commit"
+          exit 0
+        fi
+        
         git add pyproject.toml
-        git commit -m "Auto-update version to $NEW_VERSION [skip ci]" || exit 0
-        git push
+        git commit -m "Auto-increment version to $NEW_VERSION [skip ci]"
+        
+        # Try to push, but don't fail the job if it doesn't work
+        if ! git push; then
+          echo "⚠️ Could not push version update - continuing anyway"
+        fi
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
