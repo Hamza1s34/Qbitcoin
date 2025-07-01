@@ -45,7 +45,6 @@ jobs:
           libmpfr-dev \
           libmpc-dev \
           swig \
-          swig4.0 \
           libsodium-dev \
           libhwloc-dev \
           libeigen3-dev
