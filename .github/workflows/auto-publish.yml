@@ -26,7 +26,17 @@ jobs:
     - name: Install dependencies
       run: |
         python -m pip install --upgrade pip
-        pip install build twine setuptools wheel
+        pip install build twine setuptools wheel pybind11 cmake
+        
+        # Install system dependencies for compilation
+        sudo apt-get update
+        sudo apt-get install -y \
+          build-essential cmake pkg-config libssl-dev libffi-dev python3-dev git \
+          autoconf libtool libboost-all-dev libgmp-dev libmpfr-dev libmpc-dev \
+          libboost-system-dev libboost-thread-dev libboost-chrono-dev \
+          libboost-program-options-dev libboost-test-dev libboost-filesystem-dev \
+          libeigen3-dev libsodium-dev libhwloc-dev gcc-multilib g++-multilib \
+          libc6-dev linux-libc-dev wget curl unzip tar gzip
     
     - name: Generate timestamp-based version
       run: |
