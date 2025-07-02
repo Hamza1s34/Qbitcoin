@@ -1,30 +1,27 @@
-plyvel
-ntplib
-Twisted
-colorlog
-simplejson
-PyYAML
-grpcio-tools
-grpcio
-google-api-python-client
-google-auth
-httplib2
-service_identity
-protobuf
-pyopenssl
-six
-click
-pqcrypto
-# Advanced quantum libraries installed by smart installer:
-# pyqrllib==1.2.3
-# pyqryptonight
-# pyqrandomx
-Flask
-json-rpc
-idna
-cryptography
-base58
-mock
-daemonize
+plyvel>=1.5.0
+ntplib>=0.4.0
+Twisted>=22.0.0
+colorlog>=6.0.0
+simplejson>=3.17.0
+PyYAML>=6.0
+grpcio-tools>=1.50.0
+grpcio>=1.50.0
+google-api-python-client>=2.70.0
+google-auth>=2.0.0
+httplib2>=0.20.0
+service_identity>=21.0.0
+protobuf>=4.0.0
+pyopenssl>=23.0.0
+six>=1.16.0
+click>=8.0.0
+pqcrypto>=0.3.0
+Flask>=2.0.0
+json-rpc>=1.13.0
+idna>=3.0
+cryptography>=40.0.0
+base58>=2.1.0
+mock>=4.0.0
+daemonize>=2.5.0
 
-#  /home/codespace/.local/share/qbitcoin
+# Note: pyqrllib, pyqryptonight, pyqrandomx are installed via smart installer
+# Run: python -m qbitcoin.smart_installer after installation

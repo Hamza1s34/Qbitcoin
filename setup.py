@@ -7,6 +7,18 @@ import os
 import sys
 
 
+def read_requirements():
+    """Read requirements from requirements.txt"""
+    requirements_path = os.path.join(os.path.dirname(__file__), 'requirements.txt')
+    with open(requirements_path, 'r') as f:
+        requirements = []
+        for line in f:
+            line = line.strip()
+            if line and not line.startswith('#') and not line.startswith('pyqrllib') and not line.startswith('pyqryptonight') and not line.startswith('pyqrandomx'):
+                requirements.append(line)
+        return requirements
+
+
 class PostInstallCommand(install):
     """Custom post-installation command"""
     def run(self):
@@ -14,7 +26,7 @@ class PostInstallCommand(install):
         
         # Run smart installer for quantum libraries after basic installation
         try:
-            print("� Running Qbitcoin smart installer for quantum libraries...")
+            print("🔧 Running Qbitcoin smart installer for quantum libraries...")
             print("📋 This will install: pyqrllib, pyqryptonight, pyqrandomx")
             print("⏳ This may take a few minutes for compilation...")
             
@@ -22,31 +34,19 @@ class PostInstallCommand(install):
             from qbitcoin.smart_installer import SmartInstaller
             installer = SmartInstaller()
             
-            # Only install the quantum libraries, basic deps are already installed
-            quantum_libs = {
-                'pyqrllib': 'theQRL/pyqrllib',
-                'pyqryptonight': 'davebaird/pyqryptonight', 
-                'pyqrandomx': 'monero-ecosystem/pyqrandomx'
-            }
-            
             print("🧬 Installing quantum-resistant libraries with mining support...")
-            for lib_name, repo in quantum_libs.items():
-                print(f"🔄 Processing {lib_name}...")
-                
-                if installer.install_with_fallback_compilation(lib_name):
-                    print(f"✅ {lib_name} installation successful!")
-                else:
-                    print(f"⚠️  {lib_name} installation failed - mining features may be limited")
+            success = installer.install_all_quantum_libraries()
             
-            print("✅ Smart installation completed!")
-            print("💡 If quantum libraries failed, you can manually run: python -m qbitcoin.smart_installer")
+            if success:
+                print("✅ Smart installation completed successfully!")
+            else:
+                print("⚠️  Some quantum libraries may have failed - basic functionality available")
+                print("💡 You can manually run: python -m qbitcoin.smart_installer")
             
         except Exception as e:
             print(f"⚠️  Smart installer encountered issues: {e}")
             print("💡 You can manually install quantum libraries by running:")
             print("   python -m qbitcoin.smart_installer")
-            print("🔧 Or install individual libraries with:")
-            print("   pip install pyqrllib pyqryptonight pyqrandomx")
             # Don't fail the entire installation for quantum library issues
 
 
@@ -55,36 +55,10 @@ this_directory = os.path.abspath(os.path.dirname(__file__))
 with open(os.path.join(this_directory, 'README.md'), encoding='utf-8') as f:
     long_description = f.read()
 
-# Basic requirements that should work on most systems
-basic_requirements = [
-    'plyvel>=1.5.0',
-    'ntplib>=0.4.0', 
-    'Twisted>=22.0.0',
-    'colorlog>=6.0.0',
-    'simplejson>=3.17.0',
-    'PyYAML>=6.0',
-    'grpcio-tools>=1.50.0',
-    'grpcio>=1.50.0',
-    'google-api-python-client>=2.70.0',
-    'google-auth>=2.0.0',
-    'httplib2>=0.20.0',
-    'service_identity>=21.0.0',
-    'protobuf>=4.0.0',
-    'pyopenssl>=23.0.0',
-    'six>=1.16.0',
-    'click>=8.0.0',
-    'cryptography>=40.0.0',
-    'Flask>=2.0.0',
-    'json-rpc>=1.13.0',
-    'idna>=3.0',
-    'base58>=2.1.0',
-    'mock>=4.0.0',
-    'daemonize>=2.5.0',
-]
-
-# Basic quantum library that usually works
+# Get requirements from requirements.txt
+install_requirements = read_requirements()
 quantum_requirements = [
-    'pqcrypto>=0.3.0; platform_machine=="x86_64"',
+    'pqcrypto>=0.3.0',
 ]
 
 # Note: Advanced quantum libraries (pyqrllib, pyqryptonight, pyqrandomx) 
@@ -92,7 +66,7 @@ quantum_requirements = [
 
 setup(
     name='qbitcoin',
-    version='1.0.2',
+    version='1.0.3',
     author='Hamza',
     author_email='qbitcoin@example.com',
     description='A Python-based cryptocurrency implementation with quantum-resistant features',
@@ -120,7 +94,7 @@ setup(
         'Topic :: Internet :: WWW/HTTP :: Dynamic Content',
     ],
     python_requires='>=3.8',
-    install_requires=basic_requirements + quantum_requirements,
+    install_requires=install_requirements,
     extras_require={
         'quantum-full': [
             # Note: These require compilation and are better installed via smart installer
