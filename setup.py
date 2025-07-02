@@ -19,6 +19,16 @@ def read_requirements():
         return requirements
 
 
+def get_version():
+    """Get version from the centralized version file"""
+    version_file = os.path.join(os.path.dirname(__file__), 'qbitcoin', 'version.py')
+    with open(version_file, 'r') as f:
+        for line in f:
+            if line.startswith('__version__'):
+                return line.split('=')[1].strip().strip('"\'')
+    return "1.0.7"  # fallback version
+
+
 class PostInstallCommand(install):
     """Custom post-installation command"""
     def run(self):
@@ -66,7 +76,7 @@ quantum_requirements = [
 
 setup(
     name='qbitcoin',
-    version='1.0.3',
+    version=get_version(),
     author='Hamza',
     author_email='qbitcoin@example.com',
     description='A Python-based cryptocurrency implementation with quantum-resistant features',

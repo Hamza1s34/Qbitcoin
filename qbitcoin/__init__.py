@@ -2,8 +2,7 @@
 
 __all__ = ['core', 'crypto']
 
-from . import _version
-__version__ = _version.get_versions()['version']
+from .version import __version__, get_version, get_versions
 
 # Smart dependency checking and installation
 import os
