@@ -1,0 +1,87 @@
+name: Manual Release to PyPI
+
+on:
+  workflow_dispatch:
+    inputs:
+      version_action:
+        description: 'Version action'
+        required: true
+        default: 'patch'
+        type: choice
+        options:
+        - patch
+        - minor
+        - major
+        - custom
+      custom_version:
+        description: 'Custom version (only if version_action is custom)'
+        required: false
+        type: string
+      create_tag:
+        description: 'Create Git tag'
+        required: true
+        default: true
+        type: boolean
+
+jobs:
+  manual-release:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
+        token: ${{ secrets.GITHUB_TOKEN }}
+    
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.9'
+    
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install build twine setuptools wheel
+        pip install -r requirements.txt
+    
+    - name: Update version
+      run: |
+        if [ "${{ github.event.inputs.version_action }}" = "custom" ]; then
+          python version_manager.py --set "${{ github.event.inputs.custom_version }}"
+        else
+          python version_manager.py --bump "${{ github.event.inputs.version_action }}"
+        fi
+    
+    - name: Get new version
+      id: get_version
+      run: |
+        version=$(python -c "from qbitcoin.version import __version__; print(__version__)")
+        echo "version=$version" >> $GITHUB_OUTPUT
+        echo "New version: $version"
+    
+    - name: Build package
+      run: python -m build
+    
+    - name: Publish to PyPI
+      env:
+        TWINE_USERNAME: __token__
+        TWINE_PASSWORD: ${{ secrets.PYPI_API_TOKEN }}
+      run: |
+        python -m twine upload dist/* --verbose
+    
+    - name: Create Git tag
+      if: github.event.inputs.create_tag == 'true'
+      run: |
+        version=${{ steps.get_version.outputs.version }}
+        git config --local user.email "action@github.com"
+        git config --local user.name "GitHub Action"
+        git tag -a "v$version" -m "Manual release v$version"
+        git push origin "v$version"
+    
+    - name: Commit version changes
+      run: |
+        git config --local user.email "action@github.com"
+        git config --local user.name "GitHub Action"
+        git add .
+        git commit -m "Release v${{ steps.get_version.outputs.version }}"
+        git push

@@ -1,0 +1,82 @@
+name: Publish to PyPI
+
+on:
+  push:
+    branches: [ main, master ]
+  workflow_dispatch:
+
+jobs:
+  build-and-publish:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
+    
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.9'
+    
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install build twine setuptools wheel
+        pip install -r requirements.txt
+    
+    - name: Get current version
+      id: get_version
+      run: |
+        version=$(python -c "from qbitcoin.version import __version__; print(__version__)")
+        echo "version=$version" >> $GITHUB_OUTPUT
+        echo "Current version: $version"
+    
+    - name: Check if version exists on PyPI
+      id: check_version
+      run: |
+        version=${{ steps.get_version.outputs.version }}
+        response=$(curl -s -o /dev/null -w "%{http_code}" https://pypi.org/pypi/qbitcoin/$version/json)
+        if [ $response -eq 200 ]; then
+          echo "Version $version already exists on PyPI"
+          echo "exists=true" >> $GITHUB_OUTPUT
+        else
+          echo "Version $version does not exist on PyPI"
+          echo "exists=false" >> $GITHUB_OUTPUT
+        fi
+    
+    - name: Auto-increment version if needed
+      if: steps.check_version.outputs.exists == 'true'
+      run: |
+        echo "Version already exists, auto-incrementing patch version..."
+        python version_manager.py --bump patch
+        new_version=$(python -c "from qbitcoin.version import __version__; print(__version__)")
+        echo "New version: $new_version"
+    
+    - name: Build package
+      run: python -m build
+    
+    - name: Publish to PyPI
+      env:
+        TWINE_USERNAME: __token__
+        TWINE_PASSWORD: ${{ secrets.PYPI_API_TOKEN }}
+      run: |
+        python -m twine upload dist/* --verbose
+    
+    - name: Create Git tag
+      run: |
+        version=$(python -c "from qbitcoin.version import __version__; print(__version__)")
+        git config --local user.email "action@github.com"
+        git config --local user.name "GitHub Action"
+        git tag -a "v$version" -m "Release v$version"
+        git push origin "v$version"
+    
+    - name: Commit version changes (if any)
+      run: |
+        git config --local user.email "action@github.com"
+        git config --local user.name "GitHub Action"
+        git add .
+        if ! git diff --staged --quiet; then
+          git commit -m "Auto-increment version"
+          git push
+        fi

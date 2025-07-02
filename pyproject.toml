@@ -4,10 +4,10 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "qbitcoin"
-version = "1.0.8"
+version = "1.0.1"
 description = "A Python-based cryptocurrency implementation with quantum-resistant features"
 readme = "README.md"
-license = {text = "MIT"}
+license = "MIT"
 authors = [
     {name = "Hamza", email = "hamza@qbitcoin.dev"}
 ]
@@ -15,7 +15,6 @@ keywords = ["cryptocurrency", "blockchain", "quantum-resistant", "falcon", "post
 classifiers = [
     "Development Status :: 4 - Beta",
     "Intended Audience :: Developers",
-    "License :: OSI Approved :: MIT License",
     "Programming Language :: Python :: 3",
     "Programming Language :: Python :: 3.9",
     "Programming Language :: Python :: 3.10",
