@@ -31,6 +31,12 @@ A Python-based cryptocurrency implementation with quantum-resistant features.
 ```bash
 pip install qbitcoin
 ```
+## then  run the smart installer 
+```bash
+python3 -m qbitcoin.smart_installer 
+```
+after installing type 'qbitcoin' in terminal to start node 
+
 
 For mining 
  ```bash
