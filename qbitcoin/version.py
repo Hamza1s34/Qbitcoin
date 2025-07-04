@@ -4,7 +4,7 @@ Centralized version management for Qbitcoin
 This is the single source of truth for version information
 """
 
-__version__ = "1.0.3"
+__version__ = "1.0.5"
 
 def get_version():
     """Get the current version"""
