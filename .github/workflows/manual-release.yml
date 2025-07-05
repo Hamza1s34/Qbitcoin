@@ -65,9 +65,12 @@ jobs:
     - name: Publish to PyPI
       env:
         TWINE_USERNAME: __token__
-        TWINE_PASSWORD: ${{ secrets.PYPI_API_TOKEN }}
+        TWINE_PASSWORD: ${{ secrets.pypi}}
       run: |
+        version=${{ steps.get_version.outputs.version }}
+        echo "🚀 Publishing Qbitcoin v$version to PyPI..."
         python -m twine upload dist/* --verbose
+        echo "✅ Successfully published Qbitcoin v$version to PyPI!"
     
     - name: Create Git tag
       if: github.event.inputs.create_tag == 'true'

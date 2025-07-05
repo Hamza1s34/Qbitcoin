@@ -1,9 +1,18 @@
-name: Publish to PyPI
+name: Publish to PyPI (Semi-Automatic)
 
 on:
-  push:
-    branches: [ main, master ]
   workflow_dispatch:
+    inputs:
+      confirm_publish:
+        description: 'Confirm publication to PyPI'
+        required: true
+        default: false
+        type: boolean
+      skip_version_check:
+        description: 'Skip version existence check'
+        required: false
+        default: false
+        type: boolean
 
 permissions:
   contents: write
@@ -12,8 +21,18 @@ permissions:
 jobs:
   build-and-publish:
     runs-on: ubuntu-latest
+    environment: 
+      name: pypi-production
+      url: https://pypi.org/project/qbitcoin/
     
     steps:
+    - name: Validate inputs
+      run: |
+        if [ "${{ github.event.inputs.confirm_publish }}" != "true" ]; then
+          echo "❌ Publication not confirmed. Set 'confirm_publish' to true to proceed."
+          exit 1
+        fi
+        echo "✅ Publication confirmed by user"
     - uses: actions/checkout@v4
       with:
         fetch-depth: 0
@@ -38,39 +57,50 @@ jobs:
         echo "Current version: $version"
     
     - name: Check if version exists on PyPI
+      if: github.event.inputs.skip_version_check != 'true'
       id: check_version
       run: |
         version=${{ steps.get_version.outputs.version }}
         response=$(curl -s -o /dev/null -w "%{http_code}" https://pypi.org/pypi/qbitcoin/$version/json)
         if [ $response -eq 200 ]; then
-          echo "Version $version already exists on PyPI"
-          echo "exists=true" >> $GITHUB_OUTPUT
+          echo "❌ Version $version already exists on PyPI"
+          echo "Please update the version manually before publishing."
+          echo "Use the manual-release workflow or update version files directly."
+          exit 1
         else
-          echo "Version $version does not exist on PyPI"
+          echo "✅ Version $version does not exist on PyPI - ready to publish"
           echo "exists=false" >> $GITHUB_OUTPUT
         fi
     
-    - name: Auto-increment version if needed
-      if: steps.check_version.outputs.exists == 'true'
+    - name: Version check skipped
+      if: github.event.inputs.skip_version_check == 'true'
       run: |
-        echo "Version already exists, auto-incrementing patch version..."
-        git config --local user.email "action@github.com"
-        git config --local user.name "GitHub Action"
-        python version_manager.py --bump patch
-        new_version=$(python -c "from qbitcoin.version import __version__; print(__version__)")
-        echo "New version: $new_version"
-        git add .
-        git commit -m "Auto-increment version to $new_version" || echo "No changes to commit"
+        version=${{ steps.get_version.outputs.version }}
+        echo "⚠️ Version check skipped for version $version"
+        echo "Publishing without checking if version exists on PyPI"
     
     - name: Build package
-      run: python -m build
+      run: |
+        echo "🔨 Building package..."
+        python -m build
+        echo "📦 Package built successfully"
+        ls -la dist/
+    
+    - name: Verify package contents
+      run: |
+        echo "🔍 Verifying package contents..."
+        python -m twine check dist/*
     
     - name: Publish to PyPI
       env:
         TWINE_USERNAME: __token__
         TWINE_PASSWORD: ${{ secrets.pypi }}
       run: |
+        version=${{ steps.get_version.outputs.version }}
+        echo "🚀 Publishing Qbitcoin v$version to PyPI..."
         python -m twine upload dist/* --verbose
+        echo "✅ Successfully published Qbitcoin v$version to PyPI!"
+        echo "📍 Package URL: https://pypi.org/project/qbitcoin/$version/"
     
     - name: Create Git tag
       run: |

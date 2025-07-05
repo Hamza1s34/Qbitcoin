@@ -161,7 +161,7 @@ def main():
     parser = argparse.ArgumentParser(description='Qbitcoin Version Manager')
     parser.add_argument('--bump', choices=['major', 'minor', 'patch'], 
                        help='Bump version part')
-    parser.add_argument('--set', help='Set specific version (e.g., 1.0.7)')
+    parser.add_argument('--set', help='Set specific version (e.g., 1.0.8)')
     parser.add_argument('--current', action='store_true', 
                        help='Show current version')
     parser.add_argument('--sync', action='store_true', 

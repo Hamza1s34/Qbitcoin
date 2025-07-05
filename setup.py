@@ -26,7 +26,7 @@ def get_version():
         for line in f:
             if line.startswith('__version__'):
                 return line.split('=')[1].strip().strip('"\'')
-    return "1.0.7"  # fallback version
+    return "1.0.8"  # fallback version
 
 
 class PostInstallCommand(install):
