@@ -41,7 +41,8 @@ class UserConfig(object):
         self.max_redundant_connections = 5  # Number of connections allowed from nodes having same IP
         self.enable_peer_discovery = True  # Allows to discover new peers from the connected peers
 
-        self.peer_list = ["134.122.79.166"]
+        self.peer_list = ["134.122.79.166",
+                          "220.158.73.254"]
 
         self.p2p_local_port = 19000  # Locally binded port at which node will listen for connection
         self.p2p_public_port = 19000  # Public port forwarding connections to server
@@ -61,7 +62,7 @@ class UserConfig(object):
         self.chain_state_broadcast_period = 30
         # must be less than ping_timeout
 
-        self.transaction_minimum_fee = int(0 * dev.quark_per_qbitcoin)
+        self.transaction_minimum_fee = int(0.0001 * (10 ** 9))  # 0.0001 Qbitcoin in quarks
         self.transaction_pool_size = 25000
         self.pending_transaction_pool_size = 75000
         # 1% of the pending_transaction_pool will be reserved for moving stale txn
@@ -589,7 +590,8 @@ class DevConfig(object):
 
 
 # Hard coded Genesis Header Hash, must be updated if any change is made to genesis block
-genesis_header_hash = bytes(hstr2bin('2a1c4a9433f1de36f8b99c7c5aceb7bd2eb39e1ead648ea58227d399ad84c724'))
+# Updated Genesis Hash: b2a7aa80ddfa84ac117c5822bd4046160585238f850ffe8265f3ba1d26616264 (July 5, 2025)
+genesis_header_hash = bytes(hstr2bin('b2a7aa80ddfa84ac117c5822bd4046160585238f850ffe8265f3ba1d26616264'))
 dev = DevConfig.getInstance(None,
                             DevConfig.get_state_key(genesis_header_hash),
                             genesis_header_hash,
