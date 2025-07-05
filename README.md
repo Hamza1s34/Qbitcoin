@@ -34,9 +34,9 @@ pip install qbitcoin
 ## then  run the smart installer 
 install build dependcies
 ```bash
- 
-```sudo apt update && sudo apt install -y build-essential cmake swig python3-dev libssl-dev libboost-all-dev libuv1-dev
-
+ sudo apt install -y build-essential cmake swig python3-dev libssl-dev libboost-all-dev libuv1-dev
+```
+after this  run smart installer 
 ```bash
 python3 -m qbitcoin.smart_installer 
 ```
