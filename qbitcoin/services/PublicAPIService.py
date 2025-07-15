@@ -73,16 +73,18 @@ class PublicAPIService(PublicAPIServicer):
         response.coins_total_supply = int(self.qbitnode.coin_supply_max)
         response.coins_emitted = int(self.qbitnode.coin_supply)
 
-        response.block_time_mean = 0
-        response.block_time_sd = 0
+        # Always calculate block time statistics for basic stats
+        tmp = list(self.qbitnode.get_block_timeseries(config.dev.block_timeseries_size))
+        if len(tmp) > 2:
+            vals = [v.time_last for v in tmp[1:]]
+            response.block_time_mean = int(mean(vals))
+            response.block_time_sd = int(variance(vals) ** 0.5)
+        else:
+            response.block_time_mean = 0
+            response.block_time_sd = 0
 
         if request.include_timeseries:
-            tmp = list(self.qbitnode.get_block_timeseries(config.dev.block_timeseries_size))
             response.block_timeseries.extend(tmp)
-            if len(tmp) > 2:
-                vals = [v.time_last for v in tmp[1:]]
-                response.block_time_mean = int(mean(vals))
-                response.block_time_sd = int(variance(vals) ** 0.5)
         return response
 
     @GrpcExceptionWrapper(qbit_pb2.GetChainStatsResp)
