@@ -291,7 +291,7 @@ class DevConfig(object):
         self.trust_min_msgcount = 10
         self.trust_min_conntime = 10
 
-        self.supplied_coins = 20000000 * (10 ** 9)  # 20 million Qbit for genesis
+        self.supplied_coins = 20000000 * (10 ** 9)  # 20 million QBCfor genesis
 
         # ======================================
         #      STATE VERSION
@@ -520,7 +520,7 @@ class DevConfig(object):
                ignore_singleton=False):
         chain = qbit_pb2.DevConfig.Chain(reorg_limit=300,
                                         max_coin_supply=30000000,
-                                        complete_emission_time_span_in_years=2)  # Changed to 2 years for halving
+                                        complete_emission_time_span_in_years=4)  # Changed to 4 years for halving
         block_size_controller = qbit_pb2.DevConfig.Block.BlockSizeController(number_of_blocks_analyze=10,
                                                                             size_multiplier=110,  # 1.1
                                                                             block_min_size_limit_in_bytes=1024 * 1024)

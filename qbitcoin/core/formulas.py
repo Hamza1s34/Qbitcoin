@@ -8,11 +8,10 @@ from qbitcoin.core.config import DevConfig
 
 def get_halving_interval(dev_config: DevConfig) -> int:
     """
-    Return the number of blocks between halvings (2 years at 1 minute per block)
-    2 years * 365.25 days/year * 24 hours/day * 60 minutes/hour = 1,051,200 blocks
+    Return the number of blocks between halvings (3.805 years at 1 minute per block).
+    3.805 years * 365.25 days/year * 24 hours/day * 60 minutes/hour = ~2,000,000 blocks
     """
-    return 2 * 365 * 24 * 60  # 2 years in minutes = 1,051,200 blocks
-
+    return 2000000  # ~3.805 years
 
 def get_initial_block_reward(dev_config: DevConfig) -> Decimal:
     """
