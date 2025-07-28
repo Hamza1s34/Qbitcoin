@@ -68,12 +68,7 @@ python start_qbitcoin.py
 
 ## Usage
 
-### GUI Mode
-Launch the graphical interface:
-```bash
-python gui/qbitcoin_gui.py
-```
-
+ 
 ### CLI Mode
 Use the command-line interface:
 ```bash
@@ -93,17 +88,7 @@ Run the test suite:
 ```bash
 pytest tests/
 ```
-## Note 
-Please note that this project is in the final development phase, so some files and features may be incomplete. If you observe any issues, kindly provide feedback or open an issue on the repository. Your input is greatly appreciated!
-
-## Credits
-
-This project is based on the [QRL (Quantum Resistant Ledger)](https://github.com/theQRL/QRL) source code. We have modified and adapted the original QRL implementation to create Qbitcoin with enhanced features and improvements.
-
-**Original Source Code:** [QRL - Quantum Resistant Ledger](https://github.com/theQRL/QRL.git)
-
-We acknowledge and appreciate the foundational work done by the QRL development team in creating a quantum-resistant blockchain platform. This project builds upon their innovative approach to post-quantum cryptography in blockchain technology.
-
+ 
 ## Contributing
 
 1. Fork the repository
