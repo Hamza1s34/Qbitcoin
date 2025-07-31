@@ -4,6 +4,7 @@
 
 [![PyPI](https://img.shields.io/pypi/v/qbitcoin.svg)](https://pypi.org/project/qbitcoin/)
 [![License](https://img.shields.io/github/license/Hamza1s34/Qbitcoin)](LICENSE)
+[![Website](https://img.shields.io/badge/website-qbitcoin.live-blue)](https://qbitcoin.live/)
 
 A professional-grade, quantum-resistant blockchain built from scratch in Python using Falcon-512. QBitcoin secures digital assets in the post-quantum era, featuring a robust wallet, transaction system, mining capabilities, and a modern web-based GUI.
 
