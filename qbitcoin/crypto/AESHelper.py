@@ -16,7 +16,28 @@ class AESHelper(object):
         self.key = key_str.encode()
         self.key_hash = sha256(self.key)
 
-    def encrypt(self, message: bytes, iv=None) -> str:
+    def encrypt(self, message: bytes, iv=None) -> dict:
+        """
+        Encrypt message and return components separately for modern wallet format
+        """
+        if iv is None:
+            iv = bytes(getRandomSeed(16, ''))
+
+        cipher = Cipher(AES(self.key_hash), modes.CTR(iv), default_backend())
+        enc = cipher.encryptor()
+        ciphertext = enc.update(message) + enc.finalize()
+
+        # Return components separately for modern wallet format
+        return {
+            'ciphertext': base64.standard_b64encode(ciphertext).decode(),
+            'nonce': base64.standard_b64encode(iv).decode(),
+            'salt': base64.standard_b64encode(self.key_hash[:16]).decode()
+        }
+
+    def encrypt_legacy(self, message: bytes, iv=None) -> str:
+        """
+        Legacy encrypt method that returns combined base64 string
+        """
         if iv is None:
             iv = bytes(getRandomSeed(16, ''))
 
@@ -37,3 +58,15 @@ class AESHelper(object):
         dec = cipher.decryptor()
 
         return dec.update(secret_ciphertext) + dec.finalize()
+
+    def decrypt_with_components(self, ciphertext_b64: str, nonce_b64: str, salt_b64: str) -> bytes:
+        """
+        Decrypt using separate components for modern wallet format
+        """
+        ciphertext = base64.standard_b64decode(ciphertext_b64.encode())
+        iv = base64.standard_b64decode(nonce_b64.encode())
+
+        cipher = Cipher(AES(self.key_hash), modes.CTR(iv), default_backend())
+        dec = cipher.decryptor()
+
+        return dec.update(ciphertext) + dec.finalize()

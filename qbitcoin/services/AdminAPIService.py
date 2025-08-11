@@ -9,4 +9,4 @@ from qbitcoin.generated.qbit_pb2_grpc import AdminAPIServicer
 class AdminAPIService(AdminAPIServicer):
     # TODO: Separate the Service from the node model
     def __init__(self, qrlnode: QbitcoinNode):
-        self.qrlnode = qrlnode
+        self.qbitnode = qrlnode

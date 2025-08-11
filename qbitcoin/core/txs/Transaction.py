@@ -223,7 +223,11 @@ class Transaction(object, metaclass=ABCMeta):
         return True
 
     def validate_all(self, state_container: StateContainer, check_nonce=True) -> bool:
-        if state_container.block_number >= state_container.current_dev_config.hard_fork_heights[2]:
+        # Check banned addresses only after hard fork height (index 0 = banned address enforcement)
+        current_block_number = state_container.block_number
+        banned_address_hard_fork_height = state_container.current_dev_config.hard_fork_heights[0]
+        
+        if current_block_number >= banned_address_hard_fork_height:
             for banned_address in state_container.current_dev_config.banned_address:
                 tx_type = self.pbdata.WhichOneof('transactionType')
                 addr_from_pk = None
@@ -231,21 +235,56 @@ class Transaction(object, metaclass=ABCMeta):
                     addr_from_pk = falcon_pk_to_address(self.PK)
 
                 if addr_from_pk == banned_address or self.master_addr == banned_address:
-                    logger.warning("Banned QRL Address found in master_addr or pk")
+                    logger.warning(f"Banned Qbitcoin Address found in master_addr or pk at block {current_block_number} (banned since block {banned_address_hard_fork_height})")
                     return False
                 if tx_type == 'coinbase':
                     if self.pbdata.coinbase.addr_to == banned_address:
-                        logger.warning("Banned QRL Address found in coinbase.addr_to")
+                        logger.warning(f"Banned Qbitcoin Address found in coinbase.addr_to at block {current_block_number}")
                         return False
                 elif tx_type == 'message':
                     if self.pbdata.message.addr_to == banned_address:
-                        logger.warning("Banned QRL Address found in message.addr_to")
+                        logger.warning(f"Banned Qbitcoin Address found in message.addr_to at block {current_block_number}")
                         return False
                 elif tx_type == 'transfer':
                     for addr_to in self.pbdata.transfer.addrs_to:
                         if banned_address == addr_to:
-                            logger.warning("Banned QRL Address found in transfer.addr_to")
+                            logger.warning(f"Banned Qbitcoin Address found in transfer.addr_to at block {current_block_number}")
                             return False
+                elif tx_type == 'token':
+                    # Token transactions don't have recipient addresses to check
+                    # Only sender validation (already done above with addr_from_pk)
+                    pass
+                elif tx_type == 'transfer_token':
+                    for addr_to in self.pbdata.transfer_token.addrs_to:
+                        if banned_address == addr_to:
+                            logger.warning(f"Banned Qbitcoin Address found in transfer_token.addr_to at block {current_block_number}")
+                            return False
+                elif tx_type == 'slave':
+                    for slave_pk in self.pbdata.slave.slave_pks:
+                        slave_addr = falcon_pk_to_address(slave_pk)
+                        if banned_address == slave_addr:
+                            logger.warning(f"Banned Qbitcoin Address found in slave addresses at block {current_block_number}")
+                            return False
+                elif tx_type == 'latticePK':
+                    # Lattice transactions don't have recipient addresses
+                    # Only sender validation (already done above with addr_from_pk)
+                    pass
+                elif tx_type == 'multi_sig_create':
+                    # Check all signatories in multi-sig creation
+                    for signatory in self.pbdata.multi_sig_create.signatories:
+                        if banned_address == signatory:
+                            logger.warning(f"Banned Qbitcoin Address found in multi_sig_create.signatories at block {current_block_number}")
+                            return False
+                elif tx_type == 'multi_sig_spend':
+                    # Check all addresses to in multi-sig spend
+                    for addr_to in self.pbdata.multi_sig_spend.addrs_to:
+                        if banned_address == addr_to:
+                            logger.warning(f"Banned Qbitcoin Address found in multi_sig_spend.addr_to at block {current_block_number}")
+                            return False
+                elif tx_type == 'multi_sig_vote':
+                    # Multi-sig vote transactions don't have recipient addresses
+                    # Only sender validation (already done above with addr_from_pk)
+                    pass
 
         if self.pbdata.WhichOneof('transactionType') == 'coinbase':
             if not self._validate_extended(state_container):

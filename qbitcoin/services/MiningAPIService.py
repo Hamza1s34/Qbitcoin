@@ -25,7 +25,7 @@ class MiningAPIService(MiningAPIServicer):
                                  request: qbitmining_pb2.GetBlockMiningCompatibleReq,
                                  context) -> qbitmining_pb2.GetBlockMiningCompatibleResp:
 
-        blockheader, block_metadata = self.qrlnode.get_blockheader_and_metadata(request.height)
+        blockheader, block_metadata = self.qbitnode.get_blockheader_and_metadata(request.height)
 
         response = qbitmining_pb2.GetBlockMiningCompatibleResp()
         if blockheader is not None and block_metadata is not None:
@@ -41,14 +41,14 @@ class MiningAPIService(MiningAPIServicer):
                            context) -> qbitmining_pb2.GetLastBlockHeaderResp:
         response = qbitmining_pb2.GetLastBlockHeaderResp()
 
-        blockheader, block_metadata = self.qrlnode.get_blockheader_and_metadata(request.height)
+        blockheader, block_metadata = self.qbitnode.get_blockheader_and_metadata(request.height)
 
         response.difficulty = int(bin2hstr(block_metadata.block_difficulty), 16)
         response.height = blockheader.block_number
         response.timestamp = blockheader.timestamp
         response.reward = blockheader.block_reward + blockheader.fee_reward
         response.hash = bin2hstr(blockheader.headerhash)
-        response.depth = self.qrlnode.block_height - blockheader.block_number
+        response.depth = self.qbitnode.block_height - blockheader.block_number
 
         return response
 
@@ -59,15 +59,15 @@ class MiningAPIService(MiningAPIServicer):
 
         response = qbitmining_pb2.GetBlockToMineResp()
 
-        blocktemplate_blob_and_difficulty = self.qrlnode.get_block_to_mine(request.wallet_address)
+        blocktemplate_blob_and_difficulty = self.qbitnode.get_block_to_mine(request.wallet_address)
 
         if blocktemplate_blob_and_difficulty:
             response.blocktemplate_blob = blocktemplate_blob_and_difficulty[0]
             response.difficulty = blocktemplate_blob_and_difficulty[1]
-            response.height = self.qrlnode.block_height + 1
+            response.height = self.qbitnode.block_height + 1
             response.reserved_offset = config.dev.extra_nonce_offset
             seed_block_number = self._qn.get_seed_height(response.height)
-            response.seed_hash = bin2hstr(self.qrlnode.get_block_header_hash_by_number(seed_block_number))
+            response.seed_hash = bin2hstr(self.qbitnode.get_block_header_hash_by_number(seed_block_number))
 
         return response
 
@@ -77,6 +77,6 @@ class MiningAPIService(MiningAPIServicer):
                          context) -> qbitmining_pb2.SubmitMinedBlockResp:
         response = qbitmining_pb2.SubmitMinedBlockResp()
 
-        response.error = not self.qrlnode.submit_mined_block(request.blob)
+        response.error = not self.qbitnode.submit_mined_block(request.blob)
 
         return response

@@ -17,6 +17,6 @@ class DebugAPIService(DebugAPIServicer):
     @GrpcExceptionWrapper(qbitdebug_pb2.GetFullStateResp)
     def GetFullState(self, request: qbitdebug_pb2.GetFullStateReq, context) -> qbitdebug_pb2.GetFullStateResp:
         return qbitdebug_pb2.GetFullStateResp(
-            coinbase_state=self.qrlnode.get_address_state(config.dev.coinbase_address).pbdata,
-            addresses_state=self.qrlnode.get_all_address_state()
+            coinbase_state=self.qbitnode.get_address_state(config.dev.coinbase_address).pbdata,
+            addresses_state=self.qbitnode.get_all_address_state()
         )

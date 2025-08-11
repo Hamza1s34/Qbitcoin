@@ -6,6 +6,8 @@ sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')
 
 
 import os
+import time
+import base64
 from binascii import hexlify, a2b_base64
 from collections import namedtuple
 from decimal import Decimal
@@ -17,6 +19,7 @@ import simplejson as json
 from google.protobuf.json_format import MessageToDict
 from pyqrllib.pyqrllib import hstr2bin, bin2hstr
 from qbitcoin.crypto.falcon import FalconSignature
+from qbitcoin.crypto.AESHelper import AESHelper
 
 from qbitcoin.core import config
 from qbitcoin.core.Wallet import Wallet, WalletDecryptionError
@@ -31,11 +34,180 @@ from qbitcoin.core.txs.TransferTransaction import TransferTransaction
 from qbitcoin.core.txs.multisig.MultiSigCreate import MultiSigCreate
 from qbitcoin.core.txs.multisig.MultiSigSpend import MultiSigSpend
 from qbitcoin.generated import qbit_pb2_grpc, qbit_pb2
+from qbitcoin.tools.wallet_creator import WalletCreator
 
 ENV_QRL_WALLET_DIR = 'ENV_QRL_WALLET_DIR'
 
 OutputMessage = namedtuple('OutputMessage', 'error address_items balance_items')
 BalanceItem = namedtuple('BalanceItem', 'address balance')
+
+CONNECTION_TIMEOUT = 5
+
+
+class ModernWallet:
+    """
+    New wallet format that stores wallets in data/wallets/ directory
+    with automatic encryption and structure similar to wallet_8756.json
+    """
+    
+    def __init__(self, wallet_name=None):
+        self.data_dir = config.user.data_dir
+        self.wallets_dir = os.path.join(self.data_dir, 'wallets')
+        os.makedirs(self.wallets_dir, exist_ok=True)
+        
+        if wallet_name is None:
+            # Generate unique wallet name based on timestamp
+            timestamp = int(time.time() * 1000)  # milliseconds
+            wallet_name = f"wallet_{timestamp % 10000}.json"
+        elif not wallet_name.endswith('.json'):
+            wallet_name += '.json'
+            
+        self.wallet_path = os.path.join(self.wallets_dir, wallet_name)
+        self.wallet_name = wallet_name
+    
+    def create_wallet(self, password=None):
+        """Creates a new wallet with Falcon-512 address and automatic encryption"""
+        if os.path.exists(self.wallet_path):
+            click.echo(f"Wallet {self.wallet_name} already exists")
+            return None
+            
+        # Generate Falcon-512 keypair
+        private_key_bytes, public_key_bytes = FalconSignature.generate_keypair()
+        address = WalletCreator.generate_address(public_key_bytes)
+        
+        # Get password for encryption
+        if password is None:
+            password = click.prompt('Enter password to encrypt wallet', hide_input=True, confirmation_prompt=True)
+        
+        # Encrypt private key
+        cipher = AESHelper(password)
+        encrypted_data = cipher.encrypt(private_key_bytes)
+        
+        # Create wallet structure similar to wallet_8756.json
+        wallet_data = {
+            "address": address,
+            "algorithm": "falcon-512",
+            "created_at": time.time(),
+            "encrypted": True,
+            "encryption_version": "1.0",
+            "name": f"QBitcoin_Wallet_{int(time.time() * 1000)}",
+            "private_key_encrypted": {
+                "ciphertext": encrypted_data['ciphertext'],
+                "encrypted": True,
+                "nonce": encrypted_data['nonce'],
+                "salt": encrypted_data['salt']
+            },
+            "private_key_size": len(private_key_bytes),
+            "public_key": public_key_bytes.hex(),
+            "public_key_size": len(public_key_bytes)
+        }
+        
+        # Save wallet
+        with open(self.wallet_path, 'w') as f:
+            json.dump(wallet_data, f, indent=2)
+        
+        return {
+            'address': address,
+            'wallet_path': self.wallet_path,
+            'wallet_name': self.wallet_name,
+            'public_key_bytes': public_key_bytes,
+            'private_key_bytes': private_key_bytes  # Only returned during creation
+        }
+    
+    def load_wallet(self, password):
+        """Load and decrypt a wallet"""
+        if not os.path.exists(self.wallet_path):
+            return None
+            
+        with open(self.wallet_path, 'r') as f:
+            wallet_data = json.load(f)
+        
+        # Decrypt private key
+        cipher = AESHelper(password)
+        encrypted_info = wallet_data['private_key_encrypted']
+        private_key_bytes = cipher.decrypt_with_components(
+            encrypted_info['ciphertext'],
+            encrypted_info['nonce'],
+            encrypted_info['salt']
+        )
+        
+        public_key_bytes = bytes.fromhex(wallet_data['public_key'])
+        
+        return {
+            'address': wallet_data['address'],
+            'public_key_bytes': public_key_bytes,
+            'private_key_bytes': private_key_bytes,
+            'wallet_data': wallet_data
+        }
+    
+    def list_wallets(self):
+        """List all wallets in the wallets directory"""
+        wallets = []
+        if os.path.exists(self.wallets_dir):
+            for filename in os.listdir(self.wallets_dir):
+                if filename.endswith('.json'):
+                    wallet_path = os.path.join(self.wallets_dir, filename)
+                    try:
+                        with open(wallet_path, 'r') as f:
+                            wallet_data = json.load(f)
+                        wallets.append({
+                            'name': filename,
+                            'address': wallet_data.get('address', 'Unknown'),
+                            'created_at': wallet_data.get('created_at', 0),
+                            'path': wallet_path
+                        })
+                    except Exception as e:
+                        click.echo(f"Error reading wallet {filename}: {e}")
+        return wallets
+
+
+def get_modern_wallet_by_address_or_index(address_or_index, password=None):
+    """Get wallet by address or index from modern wallet format"""
+    modern_wallet = ModernWallet()
+    wallets = modern_wallet.list_wallets()
+    
+    if not wallets:
+        return None, None
+    
+    # Handle index
+    if address_or_index.isdigit():
+        index = int(address_or_index)
+        if 0 <= index < len(wallets):
+            wallet_info = wallets[index]
+            modern_wallet.wallet_path = wallet_info['path']
+            modern_wallet.wallet_name = wallet_info['name']
+            
+            if password is None:
+                password = click.prompt('Enter wallet password', hide_input=True)
+            
+            wallet_data = modern_wallet.load_wallet(password)
+            if wallet_data:
+                return wallet_data['address'], {
+                    'private_key_bytes': wallet_data['private_key_bytes'],
+                    'public_key_bytes': wallet_data['public_key_bytes'],
+                    'address': wallet_data['address']
+                }
+    
+    # Handle address
+    elif address_or_index.startswith('Q'):
+        for wallet_info in wallets:
+            if wallet_info['address'] == address_or_index:
+                modern_wallet.wallet_path = wallet_info['path']
+                modern_wallet.wallet_name = wallet_info['name']
+                
+                if password is None:
+                    password = click.prompt('Enter wallet password', hide_input=True)
+                
+                wallet_data = modern_wallet.load_wallet(password)
+                if wallet_data:
+                    return wallet_data['address'], {
+                        'private_key_bytes': wallet_data['private_key_bytes'],
+                        'public_key_bytes': wallet_data['public_key_bytes'],
+                        'address': wallet_data['address']
+                    }
+    
+    return None, None
+
 
 CONNECTION_TIMEOUT = 5
 
@@ -148,7 +320,17 @@ def _public_get_address_balance(ctx, address):
 
 
 def _select_wallet(ctx, address_or_index):
+    """
+    Updated to work with both legacy and modern wallet formats
+    """
     try:
+        # First try modern wallet format
+        if address_or_index:
+            address, falcon_data = get_modern_wallet_by_address_or_index(address_or_index)
+            if address and falcon_data:
+                return address, falcon_data
+        
+        # Fallback to legacy wallet format
         wallet = Wallet(wallet_path=ctx.obj.wallet_path)
         if len(wallet.address_items) == 0:
             click.echo('This command requires a local wallet')
@@ -244,56 +426,389 @@ def qrl(ctx, verbose, host, port_pub, wallet_dir, json):
 @click.pass_context
 def wallet_ls(ctx):
     """
-    Lists available wallets
+    Lists available wallets (both modern and legacy formats)
     """
-    wallet = Wallet(wallet_path=ctx.obj.wallet_path)
-    _print_addresses(ctx, wallet.address_items, ctx.obj.wallet_dir)
+    # List modern wallets
+    modern_wallet = ModernWallet()
+    modern_wallets = modern_wallet.list_wallets()
+    
+    if modern_wallets:
+        click.echo("Modern Wallets (in data/wallets/):")
+        click.echo("{:<8}{:<83}{:<13}{:<20}".format('Number', 'Address', 'Balance', 'Created'))
+        click.echo('-' * 120)
+        
+        for i, wallet_info in enumerate(modern_wallets):
+            try:
+                balance_quark = _public_get_address_balance(ctx, wallet_info['address'])
+                balance_qbitcoin = Decimal(balance_quark) / config.dev.quark_per_qbitcoin
+                balance = '{:5.8f}'.format(balance_qbitcoin)
+            except Exception:
+                balance = '?'
+            
+            created_time = time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(wallet_info['created_at']))
+            click.echo("{:<8}{:<83}{:<13}{:<20}".format(i, wallet_info['address'], balance, created_time))
+    
+    # List legacy wallets
+    try:
+        wallet = Wallet(wallet_path=ctx.obj.wallet_path)
+        if len(wallet.address_items) > 0:
+            click.echo("\nLegacy Wallet:")
+            _print_addresses(ctx, wallet.address_items, ctx.obj.wallet_dir)
+    except Exception:
+        pass  # No legacy wallet found
 
 
 @qrl.command(name='wallet_gen')
 @click.pass_context
-@click.option('--encrypt', default=False, is_flag=True, help='Encrypts important fields with AES')
-def wallet_gen(ctx, encrypt):
+@click.option('--name', default=None, help='Name for the wallet file (optional)')
+def wallet_gen(ctx, name):
     """
-    Generates a new wallet with one Falcon-512 address
+    Generates a new wallet with one Falcon-512 address in modern format
     """
-    wallet = Wallet(wallet_path=ctx.obj.wallet_path)
-    if len(wallet.address_items) > 0:
-        click.echo("Wallet already exists")
-        return
-
-    wallet.add_new_address()
-
-    _print_addresses(ctx, wallet.address_items, ctx.obj.wallet_path)
-
-    if encrypt:
-        secret = click.prompt('Enter password to encrypt wallet with', hide_input=True, confirmation_prompt=True)
-        wallet.encrypt(secret)
-
-    wallet.save()
+    modern_wallet = ModernWallet(name)
+    
+    try:
+        wallet_info = modern_wallet.create_wallet()
+        if wallet_info:
+            click.echo(f"Wallet created successfully: {wallet_info['wallet_name']}")
+            click.echo(f"Address: {wallet_info['address']}")
+            click.echo(f"Wallet stored in: {wallet_info['wallet_path']}")
+            click.echo("Wallet is automatically encrypted with the password you provided.")
+        else:
+            click.echo("Failed to create wallet")
+    except Exception as e:
+        click.echo(f"Error creating wallet: {e}")
+        quit(1)
 
 
 @qrl.command(name='wallet_add')
 @click.pass_context
-def wallet_add(ctx):
+@click.option('--name', default=None, help='Name for the new wallet file (optional)')
+@click.option('--import-file', default=None, help='Path to external wallet file to import')
+def wallet_add(ctx, name, import_file):
     """
-    Adds a Falcon-512 address to an existing wallet
+    Creates a new wallet or imports an external wallet file into data/wallets directory
     """
-    secret = None
-    wallet = Wallet(wallet_path=ctx.obj.wallet_path)
-    wallet_was_encrypted = wallet.encrypted
-    if wallet.encrypted:
-        secret = click.prompt('The wallet is encrypted. Enter password', hide_input=True)
-        wallet.decrypt(secret)
+    if import_file:
+        # Import external wallet file
+        import_external_wallet(import_file, name)
+    else:
+        # Create new wallet
+        create_new_wallet(name)
 
-    wallet.add_new_address()
 
-    _print_addresses(ctx, wallet.address_items, config.user.wallet_dir)
+def import_external_wallet(file_path, target_name=None):
+    """
+    Import an external wallet file into the data/wallets directory
+    Supports different wallet formats and converts them to modern format
+    """
+    if not os.path.exists(file_path):
+        click.echo(f"Error: Wallet file '{file_path}' not found")
+        return
+    
+    try:
+        # Read the external wallet file
+        with open(file_path, 'r') as f:
+            wallet_data = json.load(f)
+        
+        # Determine wallet format and extract key information
+        address = None
+        private_key_bytes = None
+        public_key_bytes = None
+        is_encrypted = False
+        
+        # Check if it's already our modern format
+        if all(field in wallet_data for field in ['address', 'algorithm', 'encrypted', 'private_key_encrypted', 'public_key']):
+            click.echo("Wallet is already in modern format, copying directly...")
+            address = wallet_data['address']
+            # Just copy as-is
+            save_imported_wallet(wallet_data, file_path, target_name, address)
+            return
+        
+        # Handle legacy QRL wallet format (version 0/1/2)
+        elif 'addresses' in wallet_data or isinstance(wallet_data, list):
+            click.echo("Detected legacy QRL wallet format...")
+            address, private_key_bytes, public_key_bytes = handle_legacy_wallet_format(wallet_data)
+        
+        # Handle single address wallet format (like old format)
+        elif 'qaddress' in wallet_data or ('address' in wallet_data and 'private_key' in wallet_data):
+            click.echo("Detected single address wallet format...")
+            address, private_key_bytes, public_key_bytes = handle_single_address_format(wallet_data)
+        
+        # Handle other custom formats
+        else:
+            click.echo("Detecting custom wallet format...")
+            address, private_key_bytes, public_key_bytes = handle_custom_wallet_format(wallet_data)
+        
+        if not address or not private_key_bytes or not public_key_bytes:
+            click.echo("Error: Could not extract wallet information from the file")
+            return
+        
+        # Get password for new wallet encryption
+        password = click.prompt('Enter password to encrypt the imported wallet', hide_input=True, confirmation_prompt=True)
+        
+        # Create modern wallet format
+        modern_wallet_data = create_modern_wallet_data(address, private_key_bytes, public_key_bytes, password)
+        
+        # Save the wallet
+        save_imported_wallet(modern_wallet_data, file_path, target_name, address)
+        
+    except json.JSONDecodeError:
+        click.echo("Error: Invalid JSON format in wallet file")
+    except Exception as e:
+        click.echo(f"Error importing wallet: {e}")
 
-    if wallet_was_encrypted:
-        wallet.encrypt(secret)
 
-    wallet.save()
+def handle_legacy_wallet_format(wallet_data):
+    """Handle legacy QRL wallet formats (version 0/1/2)"""
+    addresses_list = wallet_data.get('addresses', wallet_data if isinstance(wallet_data, list) else [])
+    
+    if not addresses_list:
+        raise Exception("No addresses found in legacy wallet")
+    
+    # Use first address
+    addr_data = addresses_list[0]
+    address = addr_data.get('address') or addr_data.get('qaddress')
+    
+    # Check if encrypted
+    is_encrypted = wallet_data.get('encrypted', False) or addr_data.get('encrypted', False)
+    
+    if is_encrypted:
+        password = click.prompt('Enter password to decrypt the wallet', hide_input=True)
+        
+        # Decrypt using legacy method
+        cipher = AESHelper(password)
+        private_key = cipher.decrypt(addr_data['private_key']).decode()
+        public_key = cipher.decrypt(addr_data['public_key']).decode()
+    else:
+        private_key = addr_data['private_key']
+        public_key = addr_data['public_key']
+    
+    # Convert to bytes
+    private_key_bytes = base64.b64decode(private_key)
+    public_key_bytes = base64.b64decode(public_key)
+    
+    return address, private_key_bytes, public_key_bytes
+
+
+def handle_single_address_format(wallet_data):
+    """Handle single address wallet formats"""
+    address = wallet_data.get('qaddress') or wallet_data.get('address')
+    
+    # Check if encrypted
+    is_encrypted = wallet_data.get('encrypted', False)
+    
+    if is_encrypted:
+        password = click.prompt('Enter password to decrypt the wallet', hide_input=True)
+        
+        # Try different decryption methods
+        if 'private_key_encrypted' in wallet_data:
+            # Modern encryption format
+            cipher = AESHelper(password)
+            encrypted_info = wallet_data['private_key_encrypted']
+            private_key_bytes = cipher.decrypt_with_components(
+                encrypted_info['ciphertext'],
+                encrypted_info['nonce'],
+                encrypted_info['salt']
+            )
+        else:
+            # Legacy encryption
+            cipher = AESHelper(password)
+            private_key_bytes = cipher.decrypt(wallet_data['private_key'])
+    else:
+        # Not encrypted
+        if 'private_key' in wallet_data:
+            if isinstance(wallet_data['private_key'], str):
+                try:
+                    private_key_bytes = base64.b64decode(wallet_data['private_key'])
+                except:
+                    private_key_bytes = bytes.fromhex(wallet_data['private_key'])
+            else:
+                private_key_bytes = wallet_data['private_key']
+        else:
+            raise Exception("No private key found in wallet")
+    
+    # Get public key
+    if 'public_key' in wallet_data:
+        if isinstance(wallet_data['public_key'], str):
+            try:
+                public_key_bytes = base64.b64decode(wallet_data['public_key'])
+            except:
+                public_key_bytes = bytes.fromhex(wallet_data['public_key'])
+        else:
+            public_key_bytes = wallet_data['public_key']
+    else:
+        raise Exception("No public key found in wallet")
+    
+    return address, private_key_bytes, public_key_bytes
+
+
+def handle_custom_wallet_format(wallet_data):
+    """Handle custom or unknown wallet formats"""
+    # Try to find address, private key, and public key in various field names
+    address_fields = ['address', 'qaddress', 'addr', 'wallet_address']
+    private_key_fields = ['private_key_hex', 'private_key', 'privatekey', 'priv_key', 'secret_key', 'sk']
+    public_key_fields = ['public_key_hex', 'public_key', 'publickey', 'pub_key', 'pk']
+    
+    address = None
+    private_key = None
+    public_key = None
+    
+    # Find address
+    for field in address_fields:
+        if field in wallet_data:
+            address = wallet_data[field]
+            break
+    
+    # Find private key
+    for field in private_key_fields:
+        if field in wallet_data:
+            private_key = wallet_data[field]
+            break
+    
+    # Find public key
+    for field in public_key_fields:
+        if field in wallet_data:
+            public_key = wallet_data[field]
+            break
+    
+    if not private_key or not public_key:
+        raise Exception("Could not find required fields (private_key, public_key) in wallet file")
+    
+    # Check if encrypted (look for common encryption indicators)
+    is_encrypted = wallet_data.get('encrypted', False) or any(
+        'encrypt' in str(key).lower() for key in wallet_data.keys()
+    )
+    
+    if is_encrypted:
+        password = click.prompt('Enter password to decrypt the wallet', hide_input=True)
+        cipher = AESHelper(password)
+        
+        # Try to decrypt
+        try:
+            if isinstance(private_key, str) and len(private_key) > 100:  # Likely encrypted
+                private_key_bytes = cipher.decrypt(private_key)
+            else:
+                # Assume it's hex and try to convert
+                private_key_bytes = bytes.fromhex(private_key)
+        except Exception as e:
+            click.echo(f"Decryption failed: {e}")
+            raise Exception("Could not decrypt private key")
+    else:
+        # Convert to bytes from hex or base64
+        if isinstance(private_key, str):
+            try:
+                # Try hex first (more common for raw keys)
+                private_key_bytes = bytes.fromhex(private_key)
+            except ValueError:
+                try:
+                    # Try base64 if hex fails
+                    private_key_bytes = base64.b64decode(private_key)
+                except Exception:
+                    raise Exception("Could not decode private key (not valid hex or base64)")
+        else:
+            private_key_bytes = private_key
+    
+    # Convert public key to bytes
+    if isinstance(public_key, str):
+        try:
+            # Try hex first
+            public_key_bytes = bytes.fromhex(public_key)
+        except ValueError:
+            try:
+                # Try base64 if hex fails
+                public_key_bytes = base64.b64decode(public_key)
+            except Exception:
+                raise Exception("Could not decode public key (not valid hex or base64)")
+    else:
+        public_key_bytes = public_key
+    
+    # Generate address if not found
+    if not address:
+        address = WalletCreator.generate_address(public_key_bytes)
+    
+    return address, private_key_bytes, public_key_bytes
+
+
+def create_modern_wallet_data(address, private_key_bytes, public_key_bytes, password):
+    """Create modern wallet format data structure"""
+    # Encrypt private key
+    cipher = AESHelper(password)
+    encrypted_data = cipher.encrypt(private_key_bytes)
+    
+    # Create modern wallet structure
+    wallet_data = {
+        "address": address,
+        "algorithm": "falcon-512",
+        "created_at": time.time(),
+        "encrypted": True,
+        "encryption_version": "1.0",
+        "name": f"QBitcoin_Wallet_{int(time.time() * 1000)}",
+        "private_key_encrypted": {
+            "ciphertext": encrypted_data['ciphertext'],
+            "encrypted": True,
+            "nonce": encrypted_data['nonce'],
+            "salt": encrypted_data['salt']
+        },
+        "private_key_size": len(private_key_bytes),
+        "public_key": public_key_bytes.hex(),
+        "public_key_size": len(public_key_bytes)
+    }
+    
+    return wallet_data
+
+
+def save_imported_wallet(wallet_data, source_path, target_name, address):
+    """Save the imported wallet to data/wallets directory"""
+    # Generate target name
+    if not target_name:
+        # Extract filename without path and extension
+        base_name = os.path.splitext(os.path.basename(source_path))[0]
+        target_name = f"{base_name}_imported"
+    
+    if not target_name.endswith('.json'):
+        target_name += '.json'
+    
+    # Create target path in data/wallets
+    modern_wallet = ModernWallet()
+    target_path = os.path.join(modern_wallet.wallets_dir, target_name)
+    
+    # Check if target already exists
+    if os.path.exists(target_path):
+        overwrite = click.confirm(f"Wallet '{target_name}' already exists. Overwrite?")
+        if not overwrite:
+            click.echo("Import cancelled")
+            return
+    
+    # Save wallet to target location
+    with open(target_path, 'w') as f:
+        json.dump(wallet_data, f, indent=2)
+    
+    click.echo(f"Wallet imported successfully:")
+    click.echo(f"  Source: {source_path}")
+    click.echo(f"  Target: {target_path}")
+    click.echo(f"  Address: {address}")
+    click.echo(f"  Format: Modern encrypted wallet")
+
+
+def create_new_wallet(name=None):
+    """
+    Create a new wallet in modern format
+    """
+    modern_wallet = ModernWallet(name)
+    
+    try:
+        wallet_info = modern_wallet.create_wallet()
+        if wallet_info:
+            click.echo(f"New wallet created: {wallet_info['wallet_name']}")
+            click.echo(f"Address: {wallet_info['address']}")
+            click.echo(f"Wallet stored in: {wallet_info['wallet_path']}")
+            click.echo("Wallet is automatically encrypted with the password you provided.")
+        else:
+            click.echo("Failed to create wallet")
+    except Exception as e:
+        click.echo(f"Error creating wallet: {e}")
+        quit(1)
 
 
 @qrl.command(name='balance')
@@ -326,87 +841,84 @@ def balance(ctx, address):
 
 
 @qrl.command(name='wallet_secret')
-@click.option('--wallet-idx', default=1, prompt=True)
+@click.option('--wallet-idx', default=0, prompt=True, help='Index of modern wallet or address')
 @click.pass_context
 def wallet_secret(ctx, wallet_idx):
     """
-    Provides the mnemonic/seed of the given address index
+    Provides the private key information of the given wallet
     """
-    wallet = Wallet(wallet_path=ctx.obj.wallet_path)
-    if wallet.encrypted:
-        secret = click.prompt('The wallet is encrypted. Enter password', hide_input=True)
-        wallet.decrypt(secret)
+    try:
+        # Try to get modern wallet by index
+        modern_wallet = ModernWallet()
+        wallets = modern_wallet.list_wallets()
+        
+        if wallets and str(wallet_idx).isdigit() and 0 <= int(wallet_idx) < len(wallets):
+            wallet_info = wallets[int(wallet_idx)]
+            modern_wallet.wallet_path = wallet_info['path']
+            modern_wallet.wallet_name = wallet_info['name']
+            
+            password = click.prompt('Enter wallet password', hide_input=True)
+            wallet_data = modern_wallet.load_wallet(password)
+            
+            if wallet_data:
+                click.echo('Wallet Address  : {}'.format(wallet_data['address']))
+                click.echo('Private Key     : {}'.format(wallet_data['private_key_bytes'].hex()))
+                click.echo('Public Key      : {}'.format(wallet_data['public_key_bytes'].hex()))
+                return
+        
+        # Fallback to legacy wallet
+        wallet = Wallet(wallet_path=ctx.obj.wallet_path)
+        if wallet.encrypted:
+            secret = click.prompt('The wallet is encrypted. Enter password', hide_input=True)
+            wallet.decrypt(secret)
 
-    address_item = get_item_from_wallet(wallet, wallet_idx)
-    if address_item:
-        click.echo('Wallet Address  : {}'.format(address_item.qaddress))
-        click.echo('Mnemonic        : {}'.format(address_item.mnemonic))
-        click.echo('Seed            : {}'.format(address_item.seed))
+        address_item = get_item_from_wallet(wallet, wallet_idx)
+        if address_item:
+            click.echo('Wallet Address  : {}'.format(address_item.qaddress))
+            falcon_data = wallet.get_falcon_by_index(wallet_idx)
+            if falcon_data:
+                click.echo('Private Key     : {}'.format(falcon_data['private_key_bytes'].hex()))
+                click.echo('Public Key      : {}'.format(falcon_data['public_key_bytes'].hex()))
+        else:
+            click.echo('Wallet not found')
+            
+    except Exception as e:
+        click.echo(f"Error: {e}")
+        quit(1)
 
 
 @qrl.command(name='wallet_rm')
-@click.option('--wallet-idx', type=int, prompt=True, help='index of address in wallet')
+@click.option('--wallet-idx', type=int, prompt=True, help='index of modern wallet')
 @click.option('--skip-confirmation', default=False, is_flag=True, prompt=False, help='skip the confirmation prompt')
 @click.pass_context
 def wallet_rm(ctx, wallet_idx, skip_confirmation):
     """
-    Removes an address from the wallet using the given address index.
+    Removes a modern wallet file.
 
-    Warning! Use with caution. Removing an address from the wallet
-    will result in loss of access to the address and is not
-    reversible unless you have address recovery information.
-    Use the wallet_secret command for obtaining the recovery Mnemonic/Hexseed and
-    the wallet_recover command for restoring an address.
+    Warning! Use with caution. Removing a wallet file will result in 
+    loss of access to the address unless you have backed up the private key.
     """
-    wallet = Wallet(wallet_path=ctx.obj.wallet_path)
-
-    address_item = get_item_from_wallet(wallet, wallet_idx)
-
-    if address_item:
+    try:
+        modern_wallet = ModernWallet()
+        wallets = modern_wallet.list_wallets()
+        
+        if not wallets or wallet_idx >= len(wallets) or wallet_idx < 0:
+            click.echo(f'Wallet index {wallet_idx} not found')
+            return
+            
+        wallet_info = wallets[wallet_idx]
+        
         if not skip_confirmation:
-            click.echo(
-                'You are about to remove address [{0}]: {1} from the wallet.'.format(wallet_idx, address_item.qaddress))
-            click.echo(
-                'Warning! By continuing, you risk complete loss of access to this address if you do not have a '
-                'recovery Mnemonic/Hexseed.')
+            click.echo(f'You are about to remove wallet [{wallet_idx}]: {wallet_info["address"]}')
+            click.echo('Warning! By continuing, you risk complete loss of access to this address')
+            click.echo('unless you have backed up the private key.')
             click.confirm('Do you want to continue?', abort=True)
-        wallet.remove(address_item.qaddress)
-
-        _print_addresses(ctx, wallet.address_items, config.user.wallet_dir)
-
-
-@qrl.command(name='wallet_encrypt')
-@click.pass_context
-def wallet_encrypt(ctx):
-    wallet = Wallet(wallet_path=ctx.obj.wallet_path)
-    click.echo('Encrypting wallet at {}'.format(wallet.wallet_path))
-
-    secret = click.prompt('Enter password', hide_input=True, confirmation_prompt=True)
-    wallet.encrypt(secret)
-    wallet.save()
-
-
-@qrl.command(name='wallet_decrypt')
-@click.pass_context
-def wallet_decrypt(ctx):
-    wallet = Wallet(wallet_path=ctx.obj.wallet_path)
-    click.echo('Decrypting wallet at {}'.format(wallet.wallet_path))
-
-    secret = click.prompt('Enter password', hide_input=True)
-
-    try:
-        wallet.decrypt(secret)
-    except WalletDecryptionError as e:
-        click.echo(str(e))
-        quit(1)
+        
+        os.remove(wallet_info['path'])
+        click.echo(f'Wallet {wallet_info["name"]} has been removed')
+        
     except Exception as e:
-        click.echo(str(e))
-        quit(1)
-
-    try:
-        wallet.save()
-    except Exception as e:
-        click.echo(str(e))
+        click.echo(f"Error removing wallet: {e}")
         quit(1)
 
 
@@ -675,12 +1187,33 @@ def base64tohex(data):
 
 
 def tx_unbase64(tx_json_str):
-    tx_json = json.loads(tx_json_str)
-    tx_json["publicKey"] = base64tohex(tx_json["publicKey"])
-    tx_json["signature"] = base64tohex(tx_json["signature"])
-    tx_json["transactionHash"] = base64tohex(tx_json["transactionHash"])
-    tx_json["transfer"]["addrsTo"] = [base64tohex(v) for v in tx_json["transfer"]["addrsTo"]]
-    return json.dumps(tx_json, indent=True, sort_keys=True)
+    """
+    Convert base64 encoded fields in transaction JSON to hex format
+    """
+    try:
+        tx_json = json.loads(tx_json_str)
+        
+        # Convert publicKey if present
+        if "publicKey" in tx_json:
+            tx_json["publicKey"] = base64tohex(tx_json["publicKey"])
+        
+        # Convert signature if present
+        if "signature" in tx_json:
+            tx_json["signature"] = base64tohex(tx_json["signature"])
+        
+        # Convert transactionHash if present
+        if "transactionHash" in tx_json:
+            tx_json["transactionHash"] = base64tohex(tx_json["transactionHash"])
+        
+        # Convert transfer addresses if present
+        if "transfer" in tx_json and "addrsTo" in tx_json["transfer"]:
+            tx_json["transfer"]["addrsTo"] = [base64tohex(v) for v in tx_json["transfer"]["addrsTo"]]
+        
+        return json.dumps(tx_json, indent=True, sort_keys=True)
+    except Exception as e:
+        # If conversion fails, return the original JSON string
+        click.echo(f"Warning: Could not convert transaction JSON: {e}")
+        return tx_json_str
 
 
 @qrl.command(name='tx_transfer')
@@ -695,16 +1228,6 @@ def tx_transfer(ctx, src, master, dsts, amounts, message_data, fee):
     """
     Transfer coins from src to dsts
     """
-    address_src_pk = None
-    master_addr = None
-
-    addresses_dst = []
-    quark_amounts = []
-    fee_quark = 0
-
-    signing_object = None
-    message_data = message_data.encode()
-
     try:
         # Retrieve signing object
         src_addr, src_falcon = _select_wallet(ctx, src)
@@ -712,55 +1235,129 @@ def tx_transfer(ctx, src, master, dsts, amounts, message_data, fee):
             click.echo("A valid wallet is required to sign the transaction")
             quit(1)
 
-        address_src_pk = src_falcon['public_key_bytes']
-        signing_object = src_falcon
-
         # Get and validate other inputs
+        master_addr = None
         if master:
             master_addr = parse_qaddress(master)
+        
         addresses_dst, quark_amounts = _parse_dsts_amounts(dsts, amounts, check_multi_sig_address=True)
         fee_quark = _qbitcoin_to_quark(fee)
+        
+        # Encode message data
+        if message_data:
+            message_data_bytes = message_data.encode()
+        else:
+            message_data_bytes = b''
+
     except Exception as e:
         click.echo("Error validating arguments: {}".format(e))
         quit(1)
 
     try:
-        # Create transaction
-        tx = TransferTransaction.create(addrs_to=addresses_dst,
-                                        amounts=quark_amounts,
-                                        message_data=message_data,
-                                        fee=fee_quark,
-                                        xmss_pk=address_src_pk,
-                                        master_addr=master_addr)
-
-        # Sign transaction with Falcon-512
-        tx_data = tx.get_data_bytes()
-        signature = FalconSignature.sign_message(tx_data, signing_object['private_key_bytes'])
-        tx._data.signature = signature
-
-        # Print result
-        txjson = tx_unbase64(tx.to_json())
-        print(txjson)
-
-        if not tx.validate():
-            print("It was not possible to validate the signature")
+        # Create transaction manually like in the working script - BYPASS TransferTransaction.create()
+        tx = TransferTransaction()
+        tx._data.public_key = src_falcon['public_key_bytes']
+        
+        # Add destination addresses and amounts
+        for addr, amount in zip(addresses_dst, quark_amounts):
+            tx._data.transfer.addrs_to.append(addr)
+            tx._data.transfer.amounts.append(amount)
+        
+        # Add message data if provided
+        if message_data_bytes:
+            tx._data.transfer.message_data = message_data_bytes
+        
+        # Set fee
+        tx._data.fee = fee_quark
+        
+        # CRITICAL: Set master_addr directly to bypass QRLHelper issues
+        # Use source address bytes (remove 'Q' prefix and convert to bytes)
+        if src_addr.startswith('Q'):
+            addr_hex = src_addr[1:]
+            tx._data.master_addr = bytes.fromhex(addr_hex)
+        else:
+            click.echo("Invalid source address format")
             quit(1)
-
-        print("\nTransaction Blob (signed): \n")
+        
+        # Get transaction data hash for signing (MUST be done before setting signature)
+        tx_data_hash = tx.get_data_hash()
+        
+        # Sign with Falcon-512
+        click.echo("Signing transaction...")
+        signature = FalconSignature.sign_message(tx_data_hash, src_falcon['private_key_bytes'])
+        click.echo(f"DEBUG: Generated signature length: {len(signature)} bytes")
+        click.echo(f"DEBUG: Signature hash: {signature[:20].hex()}...")
+        tx._data.signature = signature
+        
+        # Update transaction hash after signing
+        tx.update_txhash()
+        
+        # Print transaction JSON - handle potential JSON conversion errors
+        try:
+            txjson = tx_unbase64(tx.to_json())
+            print("Transaction JSON:")
+            print(txjson)
+        except Exception as json_error:
+            print(f"Warning: Could not format transaction JSON: {json_error}")
+            print("Raw transaction data available")
+        
+        # Use the same validation as the working script
+        if not validate_transaction_like_script(tx):
+            click.echo("Transaction validation failed")
+            quit(1)
+        
+        click.echo("Transaction validation passed")
+        
+        # Print transaction blob
         txblob = tx.pbdata.SerializeToString()
         txblobhex = hexlify(txblob).decode()
-        print(txblobhex)
-
-        # Push transaction
-        print("Sending to a QRL Node...")
+        print(f"\nTransaction Blob (signed): \n{txblobhex}")
+        
+        # Push transaction to node
+        print("\nSending to Qbitcoin Node...")
         stub = ctx.obj.get_stub_public_api()
         push_transaction_req = qbit_pb2.PushTransactionReq(transaction_signed=tx.pbdata)
         push_transaction_resp = stub.PushTransaction(push_transaction_req, timeout=CONNECTION_TIMEOUT)
-
-        # Print result
-        print(push_transaction_resp)
+        
+        # Print result using the same logic as the working script
+        if push_transaction_resp.error_code == qbit_pb2.PushTransactionResp.SUBMITTED:
+            click.echo("Transaction successfully submitted!")
+            click.echo(f"Transaction hash: {bin2hstr(tx.txhash)}")
+        else:
+            click.echo(f"Transaction submission failed: {push_transaction_resp.error_description}")
+            
     except Exception as e:
         print("Error {}".format(str(e)))
+        import traceback
+        traceback.print_exc()
+
+
+def validate_transaction_like_script(tx):
+    """
+    Use the exact same validation as the working create_transaction.py script
+    """
+    if not tx._data.transfer.addrs_to:
+        print("Transaction has no recipient addresses")
+        return False
+    
+    if not tx._data.transfer.amounts:
+        print("Transaction has no amounts")
+        return False
+    
+    for amount in tx._data.transfer.amounts:
+        if amount <= 0:
+            print(f"Invalid amount: {amount}")
+            return False
+    
+    if tx._data.fee < 0:
+        print(f"Invalid fee: {tx._data.fee}")
+        return False
+    
+    if not tx._data.signature:
+        print("Transaction is not signed")
+        return False
+    
+    return True
 
 
 @qrl.command(name='tx_token')

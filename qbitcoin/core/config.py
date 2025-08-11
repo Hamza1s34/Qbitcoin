@@ -42,7 +42,8 @@ class UserConfig(object):
         self.enable_peer_discovery = True  # Allows to discover new peers from the connected peers
 
         self.peer_list = ["134.122.79.166",
-                          "220.158.73.254"]
+                          "220.158.73.254",
+                           "98.84.96.236"]
 
         self.p2p_local_port = 19000  # Locally binded port at which node will listen for connection
         self.p2p_public_port = 19000  # Public port forwarding connections to server
@@ -335,16 +336,17 @@ class DevConfig(object):
         # ======================================
         # HARD FORK HEIGHTS LIST
         # ======================================
-        self.hard_fork_heights = [942375, 1938000, 2078800]
-        self.hard_fork_node_disconnect_delay = [0, 0, 2880]
-        self.testnet_hard_fork_heights = [0, 0, 0]
+        
+        self.hard_fork_heights = [63000, 0, 0]
+        self.hard_fork_node_disconnect_delay = [0, 0, 0]
+        self.testnet_hard_fork_heights = [63000, 0, 0]
         self.testnet_hard_fork_node_disconnect_delay = [0, 0, 0]
 
         # ======================================
         # PROPOSAL CONFIG
         # ======================================
         self.proposal_unit_percentage = 100
-        self.banned_address = [bytes(hstr2bin('010600fcd0db869d2e1b17b452bdf9848f6fe8c74ee5b8f935408cc558c601fb69eb553fa916a1'))]
+        self.banned_address = [bytes(hstr2bin('0140ce725b1be80b7314e95fa72be3f0c89af9c2d8a2371cd9'))]
 
     @property
     def pbdata(self):

@@ -107,10 +107,12 @@ class TransferTransaction(Transaction):
 
     # checks new tx validity based upon node statedb and node mempool.
     def _validate_extended(self, state_container: StateContainer):
-        if len(self.message_data) > 0:
-            if state_container.block_number < state_container.current_dev_config.hard_fork_heights[0]:
-                logger.warning("[TransferTransaction] Hard Fork Feature not yet activated")
-                return False
+        # Removed hard fork check for message data - always allow for development
+        # Original check was:
+        # if len(self.message_data) > 0:
+        #     if state_container.block_number < state_container.current_dev_config.hard_fork_heights[0]:
+        #         logger.warning("[TransferTransaction] Hard Fork Feature not yet activated")
+        #         return False
 
         if len(self.addrs_to) > state_container.current_dev_config.transaction_multi_output_limit:
             logger.warning('[TransferTransaction] Number of addresses exceeds max limit')

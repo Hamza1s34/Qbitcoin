@@ -192,12 +192,24 @@ class Miner:
                           last_block_difficulty) -> list:
         dev_config = self._chain_manager.get_config_by_block_number(last_block.block_number + 1)
         try:
-            mining_address = bytes(hstr2bin(wallet_address[1:].decode()))
+            # Handle wallet_address input - it can be bytes or a hex string
+            if isinstance(wallet_address, bytes):
+                mining_address = wallet_address
+            elif isinstance(wallet_address, str):
+                # If it's a hex string, convert it to bytes
+                if wallet_address.startswith('Q'):
+                    # If it starts with Q, remove it and convert hex to bytes
+                    mining_address = bytes(hstr2bin(wallet_address[1:]))
+                else:
+                    # Otherwise, assume it's already a hex string
+                    mining_address = bytes(hstr2bin(wallet_address))
+            else:
+                raise ValueError("[get_block_to_mine] Invalid wallet_address type: {}".format(type(wallet_address)))
 
             if not OptimizedAddressState.address_is_valid(mining_address):
-                raise ValueError("[get_block_to_mine] Invalid Wallet Address %s", wallet_address)
+                raise ValueError("[get_block_to_mine] Invalid Wallet Address %s", mining_address)
         except Exception as e:
-            raise ValueError("Error while decoding wallet address %s", e)
+            raise ValueError("Error while decoding wallet address: %s", str(e))
 
         if self._mining_block:
             if last_block.headerhash == self._mining_block.prev_headerhash:

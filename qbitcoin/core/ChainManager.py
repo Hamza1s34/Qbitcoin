@@ -275,9 +275,11 @@ class ChainManager:
         with self.lock:
             return BlockMetadata.get_block_metadata(self._state, header_hash)
 
-    def get_blockheader_and_metadata(self, block_number=0) -> Tuple:
+    def get_blockheader_and_metadata(self, block_number=None) -> Tuple:
         with self.lock:
-            block_number = block_number or self.height  # if both are non-zero, then block_number takes priority
+            # If block_number is None, use current height. If it's 0 or positive, use that exact number
+            if block_number is None:
+                block_number = self.height
 
             result = (None, None)
             block = self.get_block_by_number(block_number)

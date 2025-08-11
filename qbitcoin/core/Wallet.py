@@ -394,8 +394,8 @@ class Wallet:
     def encrypt_item(self, index: int, key: str):
         cipher = AESHelper(key)
         tmp = self._address_items[index]._asdict()  # noqa
-        tmp['private_key'] = cipher.encrypt(tmp['private_key'].encode())
-        tmp['public_key'] = cipher.encrypt(tmp['public_key'].encode())
+        tmp['private_key'] = cipher.encrypt_legacy(tmp['private_key'].encode())
+        tmp['public_key'] = cipher.encrypt_legacy(tmp['public_key'].encode())
         tmp['encrypted'] = True
         self._address_items[index] = FalconAddressItem(**tmp)
 

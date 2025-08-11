@@ -15,20 +15,21 @@ from qbitcoin.generated.qbitbase_pb2_grpc import BaseServicer
 
 class BaseService(BaseServicer):
     def __init__(self, qrlnode: QbitcoinNode):
-        self.qrlnode = qrlnode
+        self.qbitnode = qrlnode
 
     def GetNodeInfo(self, request: GetNodeInfoReq, context) -> GetNodeInfoResp:
         try:
             resp = GetNodeInfoResp()
-            resp.version = self.qrlnode.version
+            if self.qbitnode:
+                resp.version = self.qbitnode.version
 
-            pkgdir = os.path.dirname(sys.modules['qrl'].__file__)
-            grpcprotopath = os.path.join(pkgdir, "protos", "qrl.proto")
-            with open(grpcprotopath, 'r') as infile:
-                resp.grpcProto = infile.read()
+                pkgdir = os.path.dirname(sys.modules['qbitcoin'].__file__)
+                grpcprotopath = os.path.join(pkgdir, "protos", "qbit.proto")
+                with open(grpcprotopath, 'r') as infile:
+                    resp.grpcProto = infile.read()
 
             return resp
         except Exception as e:
-            context.set_code(StatusCode.unknown)
-            context.set_details(e)
+            context.set_code(StatusCode.UNKNOWN)
+            context.set_details(str(e))
             return GetNodeInfoResp()

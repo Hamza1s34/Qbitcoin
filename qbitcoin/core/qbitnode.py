@@ -870,7 +870,7 @@ class QbitcoinNode:
 
         return reversed(result)
 
-    def get_blockheader_and_metadata(self, block_number=0) -> Tuple:
+    def get_blockheader_and_metadata(self, block_number=None) -> Tuple:
         return self._chain_manager.get_blockheader_and_metadata(block_number)
 
     def get_block_to_mine(self, wallet_address) -> list:
