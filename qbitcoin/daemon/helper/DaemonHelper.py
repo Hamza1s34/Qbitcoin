@@ -3,22 +3,20 @@
 # file LICENSE or http://www.opensource.org/licenses/mit-license.php.
 import functools
 import os
+import base64
 from collections import namedtuple
 from typing import List, Optional
 
 import simplejson
-from pyqrllib.pyqrllib import mnemonic2bin, bin2hstr, hstr2bin
 
 from qbitcoin.core import config
 from qbitcoin.core.misc import logger
 from qbitcoin.crypto.AESHelper import AESHelper
-from qbitcoin.crypto.xmss import XMSS
+from qbitcoin.crypto.falcon import FalconSignature
+from qbitcoin.core.FalconHelper import falcon_pk_to_address
 
 AddressItem = namedtuple('AddressItem',
-                         'qaddress pk hexseed mnemonic height hashFunction signatureType index encrypted slaves')
-
-
-UNRESERVED_OTS_INDEX_START = 5
+                         'qaddress private_key public_key private_key_size public_key_size signature_type encrypted slaves')
 
 
 class WalletException(Exception):
@@ -68,7 +66,21 @@ class Wallet:
         Returns all address items in the wallet
         :return:
         """
-        return [bytes(hstr2bin(item.qaddress[1:])) for item in self._address_items]
+        result = []
+        for item in self._address_items:
+            try:
+                if item.qaddress.startswith('Q'):
+                    # Handle Q-address format (Q + hex)
+                    addr_hex = item.qaddress[1:]
+                    result.append(bytes.fromhex(addr_hex))
+                else:
+                    # Handle base64 encoded address
+                    result.append(base64.b64decode(item.qaddress))
+            except Exception as e:
+                logger.warning(f"Error decoding address {item.qaddress}: {str(e)}")
+                # Return empty bytes as a fallback
+                result.append(b'')
+        return result
 
     @property
     def encrypted(self) -> bool:
@@ -82,22 +94,22 @@ class Wallet:
         return any([item.encrypted for item in self.address_items]) and not self.encrypted
 
     @functools.lru_cache(maxsize=20)
-    def get_xmss_by_index(self, idx, passphrase=None) -> Optional[XMSS]:
+    def get_falcon_by_index(self, idx, passphrase=None) -> Optional[dict]:
         """
-        Generates an XMSS tree based on the information contained in the wallet
+        Gets Falcon-512 key pair based on the information contained in the wallet
         :param idx: The index of the address item
         :param passphrase: passphrase to decrypt
-        :return: An XMSS tree object
+        :return: A dictionary containing Falcon-512 key pair information
         """
         if passphrase:
             self.decrypt_item(idx, passphrase)
 
-        xmss = self._get_xmss_by_index_no_cache(idx)
+        falcon_data = self._get_falcon_by_index_no_cache(idx)
 
         if passphrase:
             self.encrypt_item(idx, passphrase)
 
-        return xmss
+        return falcon_data
 
     def is_encrypted(self) -> bool:
         if len(self.address_items) == 0:
@@ -113,45 +125,36 @@ class Wallet:
 
         return self.version, len(self._address_items), self.encrypted
 
-    def get_xmss_by_item(self, item: AddressItem, ots_index=-1) -> XMSS:
+    def get_falcon_by_item(self, item: AddressItem) -> dict:
         """
-        Generates an XMSS tree based on the given AddressItem
+        Gets Falcon-512 key pair based on the given AddressItem
         :param item:
-        :param ots_index:
-        :return:
+        :return: A dictionary containing Falcon-512 key pair information
         """
+        # Verify the address matches the public key
+        expected_address = falcon_pk_to_address(item.public_key)
+        if item.qaddress != 'Q' + expected_address.hex():
+            raise Exception("Public key and address do not match.")
 
-        extended_seed = mnemonic2bin(item.mnemonic.strip())
-        tmp_xmss = XMSS.from_extended_seed(extended_seed)
-        if ots_index > -1:
-            tmp_xmss.set_ots_index(ots_index)
-        else:
-            tmp_xmss.set_ots_index(item.index)
+        return {
+            'address': item.qaddress,
+            'private_key': item.private_key,
+            'public_key': item.public_key,
+            'private_key_size': item.private_key_size,
+            'public_key_size': item.public_key_size,
+            'signature_type': item.signature_type
+        }
 
-        if item.qaddress != 'Q' + bin2hstr(tmp_xmss.address):
-            raise Exception("Mnemonic and address do not match.")
-
-        if item.hexseed != tmp_xmss.hexseed:
-            raise Exception("hexseed does not match.")
-
-        if item.mnemonic != tmp_xmss.mnemonic:
-            raise Exception("mnemonic does not match.")
-
-        if item.height != tmp_xmss.height:
-            raise Exception("height does not match.")
-
-        return tmp_xmss
-
-    def _get_xmss_by_index_no_cache(self, idx) -> Optional[XMSS]:
+    def _get_falcon_by_index_no_cache(self, idx) -> Optional[dict]:
         """
-        Generates an XMSS tree based on the information contained in the wallet
+        Gets Falcon-512 key pair based on the information contained in the wallet
         :param idx: The index of the address item
-        :return: An XMSS tree object
+        :return: A dictionary containing Falcon-512 key pair information
         """
         if idx >= len(self._address_items):
             return None
 
-        return self.get_xmss_by_item(self._address_items[idx])
+        return self.get_falcon_by_item(self._address_items[idx])
 
     @staticmethod
     def _get_Qaddress(addr: bytes) -> str:
@@ -160,19 +163,24 @@ class Wallet:
         :param addr:
         :return:
         """
-        return 'Q' + bin2hstr(addr)
+        return 'Q' + addr.hex()
 
     @staticmethod
-    def _get_address_item_from_xmss(xmss: XMSS) -> AddressItem:
+    def _get_address_item_from_falcon(private_key_bytes: bytes, public_key_bytes: bytes) -> AddressItem:
+        """
+        Creates an AddressItem from Falcon-512 key pair
+        :param private_key_bytes: Private key bytes
+        :param public_key_bytes: Public key bytes
+        :return: AddressItem
+        """
+        address = falcon_pk_to_address(public_key_bytes)
         return AddressItem(
-            qaddress=Wallet._get_Qaddress(xmss.address),
-            pk=bin2hstr(xmss.pk),
-            hexseed=xmss.hexseed,
-            mnemonic=xmss.mnemonic,
-            height=xmss.height,
-            hashFunction=xmss.hash_function,
-            signatureType=xmss.signature_type,
-            index=xmss.ots_index,
+            qaddress=Wallet._get_Qaddress(address),
+            private_key=private_key_bytes,
+            public_key=public_key_bytes,
+            private_key_size=len(private_key_bytes),
+            public_key_size=len(public_key_bytes),
+            signature_type="falcon-512",
             encrypted=False,
             slaves=[]
         )
@@ -183,54 +191,36 @@ class Wallet:
                 return idx, item
         return None, None
 
-    def get_xmss_by_address(self, search_addr) -> Optional[XMSS]:
+    def get_falcon_by_address(self, search_addr) -> Optional[dict]:
         search_addr_str = self._get_Qaddress(search_addr)
-        return self.get_xmss_by_qaddress(search_addr_str)
+        return self.get_falcon_by_qaddress(search_addr_str)
 
-    def get_xmss_by_qaddress(self, search_addr_str, passphrase: str=None) -> Optional[XMSS]:
+    def get_falcon_by_qaddress(self, search_addr_str, passphrase: str=None) -> Optional[dict]:
         idx, _ = self.get_address_item(search_addr_str)
 
         if idx is None:
             return None
 
-        return self.get_xmss_by_index(idx, passphrase)
+        return self.get_falcon_by_index(idx, passphrase)
 
     def set_ots_index(self, index, ots_index):
-        item = self._address_items[index]
-        self._address_items[index] = AddressItem(
-            qaddress=item.qaddress,
-            pk=item.pk,
-            hexseed=item.hexseed,
-            mnemonic=item.mnemonic,
-            height=item.height,
-            hashFunction=item.hashFunction,
-            signatureType=item.signatureType,
-            index=ots_index,
-            encrypted=item.encrypted,
-            slaves=item.slaves
-        )
-        self.save()
+        """
+        Falcon-512 doesn't use OTS indices, this method is kept for compatibility
+        """
+        # Falcon-512 doesn't use OTS indices, so this is a no-op
+        pass
 
     def set_slave_ots_index(self, index, group_index, slave_index, ots_index):
-        item = self._address_items[index].slaves[group_index][slave_index]
-        self._address_items[index].slaves[group_index][slave_index] = AddressItem(
-            qaddress=item.qaddress,
-            pk=item.pk,
-            hexseed=item.hexseed,
-            mnemonic=item.mnemonic,
-            height=item.height,
-            hashFunction=item.hashFunction,
-            signatureType=item.signatureType,
-            index=ots_index,
-            encrypted=item.encrypted,
-            slaves=item.slaves
-        )
-        self.save()
+        """
+        Falcon-512 doesn't use OTS indices, this method is kept for compatibility
+        """
+        # Falcon-512 doesn't use OTS indices, so this is a no-op
+        pass
 
     def verify_wallet(self):
         """
         Confirms that json address data is correct and valid.
-        In order to verify, it needs to create XMSS trees, so the operation
+        In order to verify, it needs to create Falcon key pairs, so the operation
         is time consuming
         :return: True if valid
         """
@@ -239,7 +229,7 @@ class Wallet:
         if not self.encrypted:
             try:
                 for i in range(num_items):
-                    self._get_xmss_by_index_no_cache(i)
+                    self._get_falcon_by_index_no_cache(i)
             except Exception as e:
                 logger.warning(e)
                 return False
@@ -307,24 +297,24 @@ class Wallet:
     def decrypt_address_item(self, item: AddressItem, key: str):
         cipher = AESHelper(key)
         tmp = item._asdict()
-        tmp['hexseed'] = cipher.decrypt(tmp['hexseed']).decode()
-        tmp['mnemonic'] = cipher.decrypt(tmp['mnemonic']).decode()
+        tmp['private_key'] = cipher.decrypt(tmp['private_key']).decode()
+        tmp['public_key'] = cipher.decrypt(tmp['public_key']).decode()
         tmp['encrypted'] = False
         return AddressItem(**tmp)
 
     def decrypt_item(self, index: int, key: str):
         cipher = AESHelper(key)
         tmp = self._address_items[index]._asdict()  # noqa
-        tmp['hexseed'] = cipher.decrypt(tmp['hexseed']).decode()
-        tmp['mnemonic'] = cipher.decrypt(tmp['mnemonic']).decode()
+        tmp['private_key'] = cipher.decrypt(tmp['private_key']).decode()
+        tmp['public_key'] = cipher.decrypt(tmp['public_key']).decode()
 
         slave_group_asdict = []
         for slaves in tmp['slaves']:
             slave_list_asdict = []
             for i in range(len(slaves)):
                 slave_list_asdict.append(slaves[i]._asdict())  # noqa
-                slave_list_asdict[i]['hexseed'] = cipher.decrypt(slave_list_asdict[i]['hexseed']).decode()
-                slave_list_asdict[i]['mnemonic'] = cipher.decrypt(slave_list_asdict[i]['mnemonic']).decode()
+                slave_list_asdict[i]['private_key'] = cipher.decrypt(slave_list_asdict[i]['private_key']).decode()
+                slave_list_asdict[i]['public_key'] = cipher.decrypt(slave_list_asdict[i]['public_key']).decode()
                 slave_list_asdict[i]['encrypted'] = False
                 slave_list_asdict[i] = AddressItem(**slave_list_asdict[i])
             slave_group_asdict.append(slave_list_asdict)
@@ -336,32 +326,32 @@ class Wallet:
         cipher = AESHelper(key)
         tmp = self._address_items[index]._asdict()  # noqa
         tmp['qaddress'] = cipher.decrypt(tmp['qaddress']).decode()
-        tmp['hexseed'] = cipher.decrypt(tmp['hexseed']).decode()
-        tmp['mnemonic'] = cipher.decrypt(tmp['mnemonic']).decode()
+        tmp['private_key'] = cipher.decrypt(tmp['private_key']).decode()
+        tmp['public_key'] = cipher.decrypt(tmp['public_key']).decode()
         tmp['encrypted'] = False
         self._address_items[index] = AddressItem(**tmp)
 
     def encrypt_address_item(self, item: AddressItem, key: str):
         cipher = AESHelper(key)
         tmp = item._asdict()  # noqa
-        tmp['hexseed'] = cipher.encrypt(tmp['hexseed'].encode())
-        tmp['mnemonic'] = cipher.encrypt(tmp['mnemonic'].encode())
+        tmp['private_key'] = cipher.encrypt(tmp['private_key'].encode())
+        tmp['public_key'] = cipher.encrypt(tmp['public_key'].encode())
         tmp['encrypted'] = True
         return AddressItem(**tmp)
 
     def encrypt_item(self, index: int, key: str):
         cipher = AESHelper(key)
         tmp = self._address_items[index]._asdict()  # noqa
-        tmp['hexseed'] = cipher.encrypt(tmp['hexseed'].encode())
-        tmp['mnemonic'] = cipher.encrypt(tmp['mnemonic'].encode())
+        tmp['private_key'] = cipher.encrypt(tmp['private_key'].encode())
+        tmp['public_key'] = cipher.encrypt(tmp['public_key'].encode())
 
         slave_group_asdict = []
         for slaves in tmp['slaves']:
             slave_list_asdict = []
             for i in range(len(slaves)):
                 slave_list_asdict.append(slaves[i]._asdict())  # noqa
-                slave_list_asdict[i]['hexseed'] = cipher.encrypt(slave_list_asdict[i]['hexseed'].encode())
-                slave_list_asdict[i]['mnemonic'] = cipher.encrypt(slave_list_asdict[i]['mnemonic'].encode())
+                slave_list_asdict[i]['private_key'] = cipher.encrypt(slave_list_asdict[i]['private_key'].encode())
+                slave_list_asdict[i]['public_key'] = cipher.encrypt(slave_list_asdict[i]['public_key'].encode())
                 slave_list_asdict[i]['encrypted'] = True
                 slave_list_asdict[i] = AddressItem(**slave_list_asdict[i])
             slave_group_asdict.append(slave_list_asdict)
@@ -423,44 +413,62 @@ class Wallet:
             logger.info("ReadWallet: reading ver1 wallet failed, this must be an old wallet")
             self._read_wallet_ver0(self.wallet_path)
 
-    def append_xmss(self, xmss):
-        tmp_item = self._get_address_item_from_xmss(xmss)
+    def append_falcon(self, private_key_bytes: bytes, public_key_bytes: bytes):
+        """
+        Append a new Falcon-512 key pair to the wallet
+        """
+        tmp_item = self._get_address_item_from_falcon(private_key_bytes, public_key_bytes)
         self._address_items.append(tmp_item)
 
-    def append_slave(self, slaves_xmss: list, passsphrase: str, index=-1):
+    def append_slave(self, slaves_falcon: list, passsphrase: str, index=-1):
         slaves_item = []
-        for xmss in slaves_xmss:
-            item = self._get_address_item_from_xmss(xmss)
+        for falcon_data in slaves_falcon:
+            item = self._get_address_item_from_falcon(falcon_data['private_key'], falcon_data['public_key'])
             if passsphrase:
                 item = self.encrypt_address_item(item, passsphrase)
             slaves_item.append(item)
         self._address_items[index].slaves.append(slaves_item)
 
-    def add_new_address(self, height, hash_function="shake128", force=False):
+    def add_new_address(self, force=False):
+        """
+        Generate a new Falcon-512 address and add it to the wallet
+        """
         if not force:
             if self.encrypted or self.encrypted_partially:
                 raise WalletEncryptionError("Please decrypt all addresses in this wallet before adding a new address!")
 
-        tmp_xmss = XMSS.from_height(height, hash_function)
+        # Generate new Falcon-512 key pair
+        private_key_bytes, public_key_bytes = FalconSignature.generate_keypair()
+        
+        self.append_falcon(private_key_bytes, public_key_bytes)
+        
+        # Return falcon keypair
+        return {
+            'private_key_bytes': private_key_bytes,
+            'public_key_bytes': public_key_bytes,
+            'address': self._address_items[-1].qaddress,
+            'private_key_size': len(private_key_bytes),
+            'public_key_size': len(public_key_bytes)
+        }
 
-        self.append_xmss(tmp_xmss)
-        return tmp_xmss
-
-    def add_slave(self, index, height, number_of_slaves=1, passphrase: str=None, hash_function="shake128", force=False):
+    def add_slave(self, index, number_of_slaves=1, passphrase: str=None, force=False):
         if not force:
             if self.encrypted or self.encrypted_partially:
                 raise WalletEncryptionError("Please decrypt all addresses in this wallet before adding a new address!")
 
-        slaves_xmss = []
+        slaves_falcon = []
 
         for i in range(number_of_slaves):
-            tmp_xmss = XMSS.from_height(height, hash_function)
-            if i == number_of_slaves - 1:
-                tmp_xmss.set_ots_index(UNRESERVED_OTS_INDEX_START)  # Start from unreserved ots index
-            slaves_xmss.append(tmp_xmss)
+            private_key_bytes, public_key_bytes = FalconSignature.generate_keypair()
+            slaves_falcon.append({
+                'private_key': private_key_bytes,
+                'public_key': public_key_bytes,
+                'private_key_size': len(private_key_bytes),
+                'public_key_size': len(public_key_bytes)
+            })
 
-        self.append_slave(slaves_xmss, passphrase, index)
-        return slaves_xmss
+        self.append_slave(slaves_falcon, passphrase, index)
+        return slaves_falcon
 
     def remove(self, addr) -> bool:
         for item in self._address_items:
