@@ -48,6 +48,15 @@ def parse_arguments():
                         help="Enables default mocknet settings")
     parser.add_argument('--dev-mode', dest='dev_mode', action='store_true', default=False,
                         help="Enables low difficulty development mode with custom mining address")
+    # Staking arguments
+    parser.add_argument('--stakingAddress', dest='staking_address', required=False,
+                        help="Qbit Wallet address to start staking with")
+    parser.add_argument('--loadDonorWallet', dest='donor_wallet', action='store_true',
+                        help="Load donor wallet for staking rewards distribution (will prompt for password)")
+    parser.add_argument('--miningstakingAddress', dest='mining_staking_address', required=False,
+                        help="Qbit Wallet address to start both mining and staking simultaneously")
+    parser.add_argument('--addDwallet', dest='add_donor_wallet', required=False,
+                        help="Import a wallet file as donor wallet for staking rewards (provide path to wallet file)")
     return parser.parse_args()
 
 
@@ -138,6 +147,16 @@ def main():
     # Enable mining if mining address is provided
     if args.mining_address:
         config.user.mining_enabled = True
+    
+    # Handle combined mining and staking address
+    if args.mining_staking_address:
+        config.user.mining_enabled = True
+        # Use the same address for both mining and staking
+        if not args.mining_address:
+            args.mining_address = args.mining_staking_address
+        if not args.staking_address:
+            args.staking_address = args.mining_staking_address
+        logger.info('Combined mining and staking enabled for address: %s', args.mining_staking_address)
 
     if config.user.mining_enabled:
         mining_address = get_mining_address(args.mining_address)
@@ -168,10 +187,116 @@ def main():
 
     logger.info('Qbitcoin blockchain  %s', config.dev.version)
     if config.user.mining_enabled:
-        logger.info('Mining/staking address %s using %s threads (0 = auto)', 'Q' + bin2hstr(mining_address), args.mining_thread_count)
+        logger.info('Mining address %s using %s threads (0 = auto)', 'Q' + bin2hstr(mining_address), args.mining_thread_count)
 
     elif args.mining_address or args.mining_thread_count:
         logger.warning('Mining is not enabled but you sent some "mining related" param via CLI')
+
+    # Initialize staking if requested
+    if args.staking_address:
+        try:
+            staking_address = bytes(hstr2bin(args.staking_address[1:]))  # Remove Q prefix
+            if qrlnode.start_staking(staking_address):
+                logger.info('Staking started for address: %s', args.staking_address)
+                
+                # Try to auto-load donor wallet for mining+staking if available
+                if args.mining_staking_address:
+                    donor_wallets_dir = os.path.join(config.user.qrl_dir, 'donor_wallets')
+                    if os.path.exists(donor_wallets_dir):
+                        donor_files = [f for f in os.listdir(donor_wallets_dir) if f.endswith('_donor.json')]
+                        if donor_files:
+                            logger.info('Found donor wallet(s) for mining+staking. Attempting auto-load...')
+                            # Try to auto-load unencrypted donor wallet
+                            if qrlnode.staking_manager.auto_load_unencrypted_donor_wallet():
+                                logger.info('Donor wallet auto-loaded successfully for reward distribution')
+                            else:
+                                logger.warning('Failed to auto-load donor wallet - rewards will not be distributed')
+                                logger.info('Use --addDwallet to import your wallet for automatic loading')
+                        else:
+                            logger.info('No donor wallets found. Use --addDwallet to import your wallet for rewards')
+                    else:
+                        logger.info('No donor wallets directory. Use --addDwallet to import your wallet for rewards')
+            else:
+                logger.warning('Failed to start staking for address: %s', args.staking_address)
+        except Exception as e:
+            logger.error('Error starting staking: %s', str(e))
+            
+    # Load donor wallet if provided
+    if args.donor_wallet:
+        import getpass
+        try:
+            # For command line, we treat this as a password prompt
+            logger.info('Donor wallet parameter provided. Please enter password to load donor wallet.')
+            password = getpass.getpass("Enter donor wallet password: ")
+            if qrlnode.load_donor_wallet(password):
+                logger.info('Donor wallet loaded successfully')
+            else:
+                logger.warning('Failed to load donor wallet (wrong password or file not found)')
+        except Exception as e:
+            logger.error('Error loading donor wallet: %s', str(e))
+
+    # Import new donor wallet if provided
+    if args.add_donor_wallet:
+        import getpass
+        import json
+        from qbitcoin.core.DonorWalletManager import DonorWalletManager
+        
+        try:
+            wallet_path = args.add_donor_wallet
+            if not os.path.exists(wallet_path):
+                logger.error('Wallet file not found: %s', wallet_path)
+                return False
+            else:
+                logger.info('Importing donor wallet from: %s', wallet_path)
+                
+                # Check if file is encrypted or not
+                try:
+                    with open(wallet_path, 'r') as f:
+                        wallet_data = json.load(f)
+                    
+                    # Check wallet file structure
+                    if not isinstance(wallet_data, dict):
+                        logger.error('Invalid wallet file structure: must be a JSON object')
+                        return False
+                    elif 'encrypted' in wallet_data and wallet_data.get('encrypted'):
+                        # Encrypted wallet - need password to decrypt and save unencrypted
+                        logger.info('Wallet is encrypted. Please enter password to decrypt and save unencrypted.')
+                        password = getpass.getpass("Enter wallet password: ")
+                        
+                        donor_manager = DonorWalletManager()
+                        if donor_manager.import_encrypted_wallet_as_unencrypted(wallet_path, password):
+                            logger.info('Encrypted donor wallet decrypted and saved unencrypted for automatic loading')
+                            return True
+                        else:
+                            logger.error('Failed to import encrypted donor wallet (wrong password or invalid file)')
+                            return False
+                    elif ('address' in wallet_data and ('pk' in wallet_data or 'private_key_hex' in wallet_data or 'private_key' in wallet_data)) or ('addresses' in wallet_data):
+                        # Unencrypted wallet - save as-is unencrypted for automatic loading
+                        logger.info('Wallet is unencrypted. Importing directly without encryption...')
+                        
+                        donor_manager = DonorWalletManager()
+                        if donor_manager.import_unencrypted_wallet_direct(wallet_path):
+                            logger.info('Unencrypted donor wallet imported and saved for automatic loading')
+                            return True
+                        else:
+                            logger.error('Failed to import unencrypted donor wallet')
+                            return False
+                    else:
+                        logger.error('Invalid wallet file structure: missing required fields')
+                        logger.error('Expected: (address + pk/private_key_hex/private_key) or (addresses)')
+                        logger.error('Found keys: %s', list(wallet_data.keys()))
+                        return False
+                        
+                except json.JSONDecodeError:
+                    logger.error('Invalid wallet file: not a valid JSON file')
+                    return False
+                except Exception as e:
+                    logger.error('Error reading wallet file: %s', str(e))
+                    return False
+                    
+        except Exception as e:
+            logger.error('Error importing donor wallet: %s', str(e))
+            return False
 
     reactor.run()
 

@@ -348,6 +348,17 @@ class DevConfig(object):
         self.proposal_unit_percentage = 100
         self.banned_address = [bytes(hstr2bin('0140ce725b1be80b7314e95fa72be3f0c89af9c2d8a2371cd9'))]
 
+        # ======================================
+        # STAKING CONFIG
+        # ======================================
+        self.staking_enabled = True
+        self.staking_reward_interval = 60 # blocks
+        self.staking_reward_amount = 180000000000  # 180 QBC in Quarks (9 decimals)
+        self.staking_min_balance = 3500000000000  # 3500 QBC minimum to stake (9 decimals)
+        self.staking_online_check_interval = 10  # seconds
+        self.staking_max_offline_time = 300  # 5 minutes max offline time
+        self.staking_max_outputs_per_tx = 100  # Maximum outputs per reward transaction
+
     @property
     def pbdata(self):
         return self._data

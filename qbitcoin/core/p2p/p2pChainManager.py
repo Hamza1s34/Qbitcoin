@@ -17,6 +17,8 @@ class P2PChainManager(P2PBaseObserver):
         channel.register(qbitlegacy_pb2.LegacyMessage.PB, self.handle_push_block)
         channel.register(qbitlegacy_pb2.LegacyMessage.BH, self.handle_block_height)
         channel.register(qbitlegacy_pb2.LegacyMessage.HEADERHASHES, self.handle_node_headerhash)
+        # Register staker message handler using PL (peer list) message type for staker announcements
+        channel.register(qbitlegacy_pb2.LegacyMessage.PL, self.handle_peer_message)
 
     def handle_fetch_block(self, source, message: qbitlegacy_pb2.LegacyMessage):  # Fetch Request for block
         """
@@ -129,3 +131,43 @@ class P2PChainManager(P2PBaseObserver):
             source.send(msg)
         else:
             source.factory.compare_and_sync(source, message.nodeHeaderHash)
+
+    def handle_peer_message(self, source, message: qbitlegacy_pb2.LegacyMessage):
+        """
+        Handle peer messages which can include staker announcements
+        :param source: Peer connection that sent the message
+        :param message: Legacy message containing peer or staker data
+        :return:
+        """
+        try:
+            P2PBaseObserver._validate_message(message, qbitlegacy_pb2.LegacyMessage.PL)
+            
+            # Check if this PL message contains staker data by looking at peer_ips
+            if message.plData and message.plData.peer_ips:
+                for peer_ip_data in message.plData.peer_ips:
+                    # Check if this is a staker announcement (starts with special prefix)
+                    if peer_ip_data.startswith("STAKER:"):
+                        try:
+                            import json
+                            # Extract staker JSON data after the "STAKER:" prefix
+                            staker_json = peer_ip_data[7:]  # Remove "STAKER:" prefix
+                            staker_data = json.loads(staker_json)
+                            
+                            # Verify this is a valid staker message
+                            if staker_data.get('type') == 'staker_update':
+                                # Get peer IP from the source connection 
+                                peer_ip = source.transport.getPeer().host
+                                
+                                # Pass to staking manager if available
+                                if hasattr(source.factory, '_qrl_node') and hasattr(source.factory._qrl_node, 'staking_manager'):
+                                    logger.info("Received staker message from peer %s: %s %s", 
+                                              peer_ip, staker_data.get('action', 'unknown'), staker_data.get('address', 'unknown'))
+                                    source.factory._qrl_node.staking_manager.handle_peer_staker_message(staker_data, peer_ip)
+                                else:
+                                    logger.debug("No staking manager available to handle peer staker message")
+                                    
+                        except (json.JSONDecodeError, ValueError) as e:
+                            logger.debug("Invalid staker data in peer message: %s", str(e))
+                            
+        except Exception as e:
+            logger.error("Error handling peer message from %s: %s", source.peer, str(e))

@@ -82,6 +82,13 @@ class POW(ConsensusMechanism):
         self.last_pow_cycle = ntp.getTime()
         last_block = self.chain_manager.last_block
         self._mine_next(last_block)
+        
+        # Notify staking manager that node is synced
+        if hasattr(self.p2p_factory, '_qrl_node') and self.p2p_factory._qrl_node:
+            try:
+                self.p2p_factory._qrl_node.staking_manager.on_node_synced()
+            except Exception as e:
+                logger.error("Error notifying staking manager of sync state: %s", str(e))
 
     def _handler_state_forked(self):
         pass
@@ -231,6 +238,19 @@ class POW(ConsensusMechanism):
 
             logger.debug('Inside add_block')
             result = self.chain_manager.add_block(block)
+            
+            # Handle staking rewards if block was successfully added
+            if result:
+                logger.debug("Block %d added successfully, checking staking manager", block.block_number)
+                if hasattr(self.p2p_factory, '_qrl_node'):
+                    logger.debug("p2p_factory has _qrl_node")
+                    if hasattr(self.p2p_factory._qrl_node, 'staking_manager'):
+                        logger.debug("_qrl_node has staking_manager, calling handle_new_block")
+                        self.p2p_factory._qrl_node.staking_manager.handle_new_block(block)
+                    else:
+                        logger.debug("_qrl_node does NOT have staking_manager")
+                else:
+                    logger.debug("p2p_factory does NOT have _qrl_node")
 
             logger.debug('trigger_miner %s', self.chain_manager.trigger_miner)
             if self.chain_manager.trigger_miner:

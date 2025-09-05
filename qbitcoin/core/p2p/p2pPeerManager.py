@@ -8,6 +8,7 @@ from ipaddress import IPv4Address
 
 import simplejson as json
 from pyqryptonight.pyqryptonight import UInt256ToString
+from twisted.internet import reactor
 
 from qbitcoin.core import config
 from qbitcoin.core.misc import logger, ntp
@@ -289,14 +290,119 @@ class P2PPeerManager(P2PBaseObserver):
 
         sender_peer = IPMetadata(source.peer.ip, message.plData.public_port)
 
+        # Filter out staker messages before processing peer addresses
+        actual_peer_ips = []
+        staker_messages = []
+        
+        for peer_ip in message.plData.peer_ips:
+            if peer_ip.startswith("STAKER_REQ:") or peer_ip.startswith("STAKER_LIST:"):
+                staker_messages.append(peer_ip)
+            else:
+                actual_peer_ips.append(peer_ip)
+
         # Check if peer list contains global ip, if it was sent by peer from a global ip address
-        new_peers = self.combine_peer_lists(message.plData.peer_ips,
+        new_peers = self.combine_peer_lists(actual_peer_ips,
                                             [sender_peer.full_address],
                                             check_global=IPv4Address(source.peer.ip).is_global)
 
         logger.info('%s peers data received: %s', source.peer.ip, new_peers)
         if self._p2p_factory is not None:
             self._p2p_factory.add_new_peers_to_peer_q(new_peers)
+
+        # Handle staker messages separately
+        self._handle_staker_messages_in_peer_list(staker_messages, source)
+
+    def _handle_staker_messages_in_peer_list(self, staker_messages: list, source):
+        """Handle staker-related messages in peer list"""
+        try:
+            import json
+            
+            for staker_message in staker_messages:
+                if staker_message.startswith("STAKER_REQ:"):
+                    # Handle staker request
+                    try:
+                        staker_json = staker_message[11:]  # Remove "STAKER_REQ:" prefix
+                        staker_data = json.loads(staker_json)
+                        if self._p2p_factory and self._p2p_factory._qrl_node:
+                            peer_host = source.peer.ip
+                            logger.info("Received staker list request from peer %s", peer_host)
+                            # Send our staker list back - pass the source connection object
+                            reactor.callLater(0.5, self._p2p_factory.send_staker_list_to_peer, source)
+                    except json.JSONDecodeError as e:
+                        logger.warning("Invalid staker request JSON from peer %s: %s", source.peer.ip, str(e))
+                        
+                elif staker_message.startswith("STAKER_LIST:"):
+                    # Handle staker list response  
+                    try:
+                        staker_json = staker_message[12:]  # Remove "STAKER_LIST:" prefix
+                        staker_data = json.loads(staker_json)
+                        if self._p2p_factory and self._p2p_factory._qrl_node:
+                            peer_host = source.peer.ip
+                            stakers = staker_data.get('stakers', [])
+                            logger.info("Received staker list from peer %s: %d stakers", peer_host, len(stakers))
+                            
+                            # Validate and process stakers with duplicate prevention
+                            processed_addresses = set()
+                            valid_count = 0
+                            duplicate_count = 0
+                            invalid_count = 0
+                            
+                            for staker_info in stakers:
+                                try:
+                                    # Get staker address for duplicate checking
+                                    staker_address = staker_info.get('address', '')
+                                    
+                                    # Handle different address formats
+                                    if isinstance(staker_address, tuple):
+                                        logger.warning("Address is tuple format from peer %s: %s", peer_host, staker_address)
+                                        if len(staker_address) == 1:
+                                            staker_address = staker_address[0]
+                                        else:
+                                            logger.error("Cannot handle multi-element tuple address from peer %s: %s", peer_host, staker_address)
+                                            invalid_count += 1
+                                            continue
+                                    
+                                    # Ensure address is string format
+                                    if not isinstance(staker_address, str):
+                                        logger.error("Address is not string format from peer %s: %s (%s)", peer_host, staker_address, type(staker_address))
+                                        invalid_count += 1
+                                        continue
+                                    
+                                    # Check for duplicates
+                                    if staker_address in processed_addresses:
+                                        duplicate_count += 1
+                                        logger.warning("Skipping duplicate staker from peer %s: %s", peer_host, staker_address)
+                                        continue
+                                        
+                                    processed_addresses.add(staker_address)
+                                    
+                                    # Basic validation
+                                    if not staker_address or not staker_info.get('balance', 0):
+                                        invalid_count += 1
+                                        logger.warning("Invalid staker data from peer %s: missing address or balance", peer_host)
+                                        continue
+                                    
+                                    # Process the staker - format it properly for our handler
+                                    formatted_message = {
+                                        'type': 'staker_update',
+                                        'action': 'add',
+                                        'address': staker_address,
+                                        'balance': staker_info.get('balance', 0)
+                                    }
+                                    self._p2p_factory._qrl_node.staking_manager.handle_peer_staker_message(formatted_message, peer_host)
+                                    valid_count += 1
+                                    
+                                except Exception as e:
+                                    invalid_count += 1
+                                    logger.warning("Error processing staker from peer %s: %s", peer_host, str(e))
+                            
+                            logger.info("Staker processing complete for peer %s: %d valid, %d duplicates, %d invalid", 
+                                       peer_host, valid_count, duplicate_count, invalid_count)
+                    except json.JSONDecodeError as e:
+                        logger.warning("Invalid staker list JSON from peer %s: %s", source.peer.ip, str(e))
+                            
+        except Exception as e:
+            logger.error("Error handling staker messages from peer %s: %s", source.peer.ip, str(e))
 
     def handle_sync(self, source, message: qbitlegacy_pb2.LegacyMessage):
         P2PBaseObserver._validate_message(message, qbitlegacy_pb2.LegacyMessage.SYNC)

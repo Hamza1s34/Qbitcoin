@@ -1,7 +1,9 @@
 # coding=utf-8
 # Distributed under the MIT software license, see the accompanying
 # file LICENSE or http://www.opensource.org/licenses/mit-license.php.
+import json
 import random
+import time
 
 from pyqrllib.pyqrllib import bin2hstr
 from pyqryptonight.pyqryptonight import UInt256ToString
@@ -488,6 +490,223 @@ class P2PFactory(ServerFactory):
         for peer in self._peer_connections:
             peer.send_sync()
 
+    def broadcast_staker_message(self, staker_data: dict):
+        """
+        Broadcast staker information to all connected peers using PL (peer list) message format
+        
+        Args:
+            staker_data: Dictionary containing staker information with keys:
+                        - 'address': hex string of staker address
+                        - 'action': 'add' or 'remove'
+                        - 'balance': staker balance
+                        - 'timestamp': timestamp
+        """
+        try:
+            import json
+            
+            # Don't broadcast if no peers connected
+            if not self._peer_connections:
+                logger.debug("No peers connected - skipping staker broadcast")
+                return
+                
+            # Create staker message content
+            staker_address = staker_data.get('address', '')
+            action = staker_data.get('action', 'add')
+            balance = staker_data.get('balance', 0)
+            timestamp = staker_data.get('timestamp', 0)
+            
+            # Create message data for the staker announcement
+            message_content = {
+                'type': 'staker_update',
+                'address': staker_address,
+                'action': action,
+                'balance': balance,
+                'timestamp': timestamp
+            }
+            
+            # Create the staker announcement as a special peer IP entry with "STAKER:" prefix
+            staker_announcement = "STAKER:" + json.dumps(message_content)
+            
+            # Create PL (peer list) message with the staker announcement
+            pl_data = qbitlegacy_pb2.PLData()
+            pl_data.peer_ips.append(staker_announcement)
+            pl_data.public_port = 19000  # Default port
+            
+            # Create the legacy message
+            legacy_msg = qbitlegacy_pb2.LegacyMessage(
+                func_name=qbitlegacy_pb2.LegacyMessage.PL,
+                plData=pl_data
+            )
+            
+            # Broadcast to all connected peers
+            logger.info("Broadcasting staker %s to %d peers: %s", 
+                       action, len(self._peer_connections), staker_address)
+            
+            sent_count = 0
+            for peer in self._peer_connections:
+                try:
+                    peer.send(legacy_msg)
+                    sent_count += 1
+                    logger.debug("Sent staker message to peer: %s", peer.transport.getPeer().host)
+                except Exception as send_error:
+                    logger.error("Failed to send staker message to peer %s: %s", 
+                               peer.transport.getPeer().host, str(send_error))
+            
+            logger.info("Successfully sent staker announcement to %d/%d peers", sent_count, len(self._peer_connections))
+                
+        except Exception as e:
+            logger.error("Failed to broadcast staker message: %s", str(e))
+            import traceback
+            traceback.print_exc()
+    
+    def send_staker_list_to_peer(self, peer_connection):
+        """Send staker list to a specific peer"""
+        try:
+            if not hasattr(self, '_qrl_node') or not self._qrl_node:
+                logger.error("No QRL node available for staker list")
+                return
+                
+            staking_manager = self._qrl_node.staking_manager
+            if not staking_manager:
+                logger.error("No staking manager available")
+                return
+                
+            # Get stakers from staking manager with validation
+            stakers_for_sync = staking_manager.get_validated_stakers_for_sync()
+            
+            staker_list_message = {
+                'type': 'staker_list',
+                'stakers': stakers_for_sync,
+                'timestamp': time.time(),
+                'count': len(stakers_for_sync)
+            }
+            
+            if peer_connection:
+                # Create peer list message with staker data
+                staker_list_announcement = f"STAKER_LIST:{json.dumps(staker_list_message)}"
+                
+                # Create PL (peer list) message with the staker list
+                pl_data = qbitlegacy_pb2.PLData()
+                pl_data.peer_ips.append(staker_list_announcement)
+                pl_data.public_port = 19000  # Default port
+                
+                legacy_msg = qbitlegacy_pb2.LegacyMessage(
+                    func_name=qbitlegacy_pb2.LegacyMessage.PL,
+                    plData=pl_data
+                )
+                
+                peer_connection.send(legacy_msg)
+                peer_ip = peer_connection.transport.getPeer().host if hasattr(peer_connection, 'transport') else 'unknown'
+                logger.info("Sent staker list to peer %s: %d stakers", peer_ip, len(stakers_for_sync))
+            else:
+                logger.warning("No peer connection provided")
+                
+        except Exception as e:
+            peer_ip = peer_connection.transport.getPeer().host if peer_connection and hasattr(peer_connection, 'transport') else 'unknown'
+            logger.error("Failed to send staker list to peer %s: %s", peer_ip, str(e))
+    
+    def _json_serialize(self, data):
+        """Helper method to serialize data to JSON"""
+        import json
+        return json.dumps(data)
+
+    def request_staker_list(self, peer_connection):
+        """
+        Request staker list from a specific peer
+        
+        Args:
+            peer_connection: The peer connection to request stakers from
+        """
+        try:
+            import json
+            
+            # Create staker request message
+            staker_request = {
+                'type': 'staker_request',
+                'timestamp': time.time()
+            }
+            
+            # Send as a special PL message with "STAKER_REQ:" prefix
+            staker_request_msg = "STAKER_REQ:" + json.dumps(staker_request)
+            
+            pl_data = qbitlegacy_pb2.PLData()
+            pl_data.peer_ips.append(staker_request_msg)
+            pl_data.public_port = 19000
+            
+            legacy_msg = qbitlegacy_pb2.LegacyMessage(
+                func_name=qbitlegacy_pb2.LegacyMessage.PL,
+                plData=pl_data
+            )
+            
+            peer_connection.send(legacy_msg)
+            logger.info("Requested staker list from peer: %s", peer_connection.transport.getPeer().host)
+            
+        except Exception as e:
+            logger.error("Failed to request staker list from peer: %s", str(e))
+
+    def broadcast_staker_list(self, requesting_peer=None):
+        """
+        Broadcast current staker list to peer(s)
+        
+        Args:
+            requesting_peer: If specified, send only to this peer. Otherwise broadcast to all.
+        """
+        try:
+            import json
+            
+            if not self._qrl_node or not self._qrl_node.staking_manager:
+                return
+                
+            # Get current stakers
+            stakers = self._qrl_node.staking_manager.get_stakers_for_sync()
+            if not stakers:
+                logger.debug("No stakers to broadcast")
+                return
+                
+            # Create staker list message
+            staker_list_data = {
+                'type': 'staker_list',
+                'stakers': stakers,
+                'timestamp': time.time(),
+                'count': len(stakers)
+            }
+            
+            # Send as PL message with "STAKER_LIST:" prefix
+            staker_list_msg = "STAKER_LIST:" + json.dumps(staker_list_data)
+            
+            pl_data = qbitlegacy_pb2.PLData()
+            pl_data.peer_ips.append(staker_list_msg)
+            pl_data.public_port = 19000
+            
+            legacy_msg = qbitlegacy_pb2.LegacyMessage(
+                func_name=qbitlegacy_pb2.LegacyMessage.PL,
+                plData=pl_data
+            )
+            
+            if requesting_peer:
+                # Send to specific peer
+                try:
+                    requesting_peer.send(legacy_msg)
+                    logger.info("Sent staker list (%d stakers) to requesting peer: %s", 
+                               len(stakers), requesting_peer.transport.getPeer().host)
+                except Exception as e:
+                    logger.error("Failed to send staker list to requesting peer: %s", str(e))
+            else:
+                # Broadcast to all peers
+                sent_count = 0
+                for peer in self._peer_connections:
+                    try:
+                        peer.send(legacy_msg)
+                        sent_count += 1
+                    except Exception as e:
+                        logger.error("Failed to send staker list to peer: %s", str(e))
+                
+                logger.info("Broadcasted staker list (%d stakers) to %d/%d peers", 
+                           len(stakers), sent_count, len(self._peer_connections))
+                
+        except Exception as e:
+            logger.error("Failed to broadcast staker list: %s", str(e))
+
     ###################################################
     ###################################################
     ###################################################
@@ -535,6 +754,14 @@ class P2PFactory(ServerFactory):
         self._peer_connections.append(conn_protocol)
 
         logger.debug('>>> new connection: %s ', conn_protocol.peer)
+        
+        # Request staker list from newly connected peer
+        try:
+            # Wait a moment for connection to stabilize, then request staker list
+            reactor.callLater(2, self.request_staker_list, conn_protocol)
+        except Exception as e:
+            logger.error("Failed to schedule staker list request for new peer: %s", str(e))
+        
         return True
 
     def remove_connection(self, conn_protocol):

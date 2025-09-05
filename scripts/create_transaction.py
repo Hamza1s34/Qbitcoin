@@ -6,6 +6,7 @@ import os
 import sys
 import json
 import grpc
+import time
 
 from pyqrllib.pyqrllib import hstr2bin, bin2hstr
 
@@ -161,47 +162,123 @@ def send_transaction(tx):
         print(f"Error sending transaction: {str(e)}")
         return False
 
+def get_user_input():
+    """Get user input for recipient address and amount"""
+    print("=== Qbitcoin Transaction Creator ===")
+    print()
+    
+    # Get recipient address
+    print("Enter recipient address (or press Enter to generate a new wallet):")
+    recipient_address = input("Recipient address: ").strip()
+    
+    # If no address provided, create a new wallet
+    if not recipient_address:
+        print("\nNo address provided. Generating a new wallet...")
+        new_wallet = create_new_wallet()
+        recipient_address = new_wallet['address']
+        
+        # Save the new wallet
+        wallet_data = {
+            "address": new_wallet['address'],
+            "public_key": new_wallet['public_key'].hex(),
+            "private_key": new_wallet['private_key'].hex(),
+            "algorithm": "falcon-512"
+        }
+        
+        wallet_filename = f"generated_wallet_{int(time.time())}.json"
+        with open(wallet_filename, 'w') as f:
+            json.dump(wallet_data, f, indent=4)
+        print(f"New wallet saved to: {wallet_filename}")
+        print(f"Generated recipient address: {recipient_address}")
+    else:
+        # Validate the provided address
+        if not recipient_address.startswith('Q'):
+            print("Error: Qbitcoin addresses must start with 'Q'")
+            return None, None
+        if len(recipient_address) != 51:  # Q + 50 hex chars
+            print("Error: Invalid address length. Qbitcoin addresses should be 51 characters long")
+            return None, None
+        
+        # Try to validate the hex format
+        try:
+            address_bytes = bytes(hstr2bin(recipient_address[1:]))
+        except Exception as e:
+            print(f"Error: Invalid address format: {e}")
+            return None, None
+    
+    print()
+    
+    # Get amount to send
+    print("Enter amount to send in QBC (or press Enter for default 1000 QBC):")
+    amount_input = input("Amount (QBC): ").strip()
+    
+    if not amount_input:
+        amount_qbc = 1000  # Default amount
+        print(f"Using default amount: {amount_qbc} QBC")
+    else:
+        try:
+            amount_qbc = float(amount_input)
+            if amount_qbc <= 0:
+                print("Error: Amount must be positive")
+                return None, None
+        except ValueError:
+            print("Error: Invalid amount format")
+            return None, None
+    
+    # Convert to quark (smallest unit)
+    amount_quark = int(amount_qbc * QUARK_PER_QBITCOIN)
+    
+    print(f"\nTransaction details:")
+    print(f"Recipient: {recipient_address}")
+    print(f"Amount: {amount_qbc} QBC ({amount_quark} quark)")
+    print()
+    
+    # Confirm transaction
+    confirm = input("Proceed with transaction? (y/N): ").strip().lower()
+    if confirm not in ['y', 'yes']:
+        print("Transaction cancelled.")
+        return None, None
+    
+    return recipient_address, amount_quark
+
 def main():
     try:
-        # Path to genesis keys JSON file
-        genesis_keys_path = os.path.join(os.path.dirname(__file__), 'genesis_keys.json')
+        # Get user input
+        recipient_address, amount_quark = get_user_input()
+        if recipient_address is None or amount_quark is None:
+            return
         
-        # Load genesis keys
+        # Path to genesis keys JSON file
+        genesis_keys_path = os.path.join(os.path.dirname(__file__), '..', 'genesis_keys.json')
+        
+        # Check if genesis keys exist
+        if not os.path.exists(genesis_keys_path):
+            print(f"Error: Genesis keys file not found at {genesis_keys_path}")
+            print("Please ensure genesis_keys.json exists in the project root directory.")
+            return
+        
+        # Load genesis keys (sender)
         genesis_keys = load_genesis_keys(genesis_keys_path)
+        print(f"Loaded sender address: {genesis_keys['address']}")
         print(f"Genesis public key length: {len(genesis_keys['public_key'])} bytes")
         
-        # Create a new wallet
-        new_wallet = create_new_wallet()
-        print(f"New wallet public key length: {len(new_wallet['public_key'])} bytes")
-        
-        # Amount to send (in quark)
-        amount_to_send = 1000 * QUARK_PER_QBITCOIN  # 1000 Qbitcoin
-        
         # Create and sign a transaction
-        tx = create_and_sign_transaction(genesis_keys, new_wallet['address'], amount_to_send)
+        print(f"\nCreating transaction...")
+        tx = create_and_sign_transaction(genesis_keys, recipient_address, amount_quark)
         print(f"Transaction created with txhash: {bin2hstr(tx.txhash)}")
         
         # Send the transaction to the node
+        print(f"Sending transaction to node...")
         success = send_transaction(tx)
         
         if success:
-            print(f"\nSuccessfully sent {amount_to_send/QUARK_PER_QBITCOIN} Qbitcoin from genesis address")
-            print(f"Source address: {genesis_keys['address']}")
-            print(f"Destination address: {new_wallet['address']}")
-            
-            # Save the new wallet to a file for future use
-            wallet_data = {
-                "address": new_wallet['address'],
-                "public_key_hex": new_wallet['public_key'].hex(),
-                "private_key_hex": new_wallet['private_key'].hex(),
-                "algorithm": "falcon-512"
-            }
-            
-            with open('new_wallet.json', 'w') as f:
-                json.dump(wallet_data, f, indent=4)
-                print("New wallet saved to new_wallet.json")
+            print(f"\n✅ Transaction successful!")
+            print(f"Amount sent: {amount_quark/QUARK_PER_QBITCOIN} QBC")
+            print(f"From: {genesis_keys['address']}")
+            print(f"To: {recipient_address}")
+            print(f"Transaction hash: {bin2hstr(tx.txhash)}")
         else:
-            print("Transaction failed.")
+            print("\n❌ Transaction failed.")
             
     except Exception as e:
         print(f"Error in main function: {str(e)}")
