@@ -1,4 +1,4 @@
-![QBitcoin Logo](https://q-bit.live/qbitcoin_logo)
+![QBitcoin Logo](https://qbitcoin.live/qbitcoin_logo)
 
 # QBitcoin
 
