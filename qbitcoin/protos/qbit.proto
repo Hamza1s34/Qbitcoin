@@ -101,18 +101,6 @@ service PublicAPI
       };
     };
 
-    rpc GetStakingStats (GetStakingStatsReq) returns (GetStakingStatsResp) {
-      option (google.api.http) = {
-        get: "/staking-stats"
-      };
-    };
-
-    rpc GetStakerList (GetStakerListReq) returns (GetStakerListResp) {
-      option (google.api.http) = {
-        get: "/staker-list"
-      };
-    };
-
     rpc GetAddressFromPK (GetAddressFromPKReq) returns (GetAddressFromPKResp) {
       option (google.api.http) = {
         get: "/address-from-pk"
@@ -333,49 +321,6 @@ message GetChainStatsResp {
     uint64 state_size = 1;                    // whole state folder size in bytes
     string state_size_mb = 2;                 // megabytes
     string state_size_gb = 3;                 // gigabytes
-}
-
-/**
- * Represents the query for staking statistics
-*/
-message GetStakingStatsReq { }
-
-/**
- * Represents the reply message for staking statistics
-*/
-message GetStakingStatsResp {
-    uint32 total_stakers = 1;                 // Total number of stakers
-    uint32 active_stakers = 2;                // Number of active stakers
-    uint64 total_staked_amount = 3;           // Total staked amount in quarks
-    bool staking_enabled = 4;                 // Whether staking is enabled
-    bool donor_wallet_loaded = 5;             // Whether donor wallet is loaded
-    uint64 min_stake_amount = 6;              // Minimum stake amount in quarks
-    uint32 reward_interval = 7;               // Reward interval in blocks
-    uint64 reward_amount = 8;                 // Reward amount per distribution in quarks
-}
-
-/**
- * Represents the query for staker list
-*/
-message GetStakerListReq { }
-
-/**
- * Represents information about a single staker
-*/
-message StakerInfo {
-    bytes address = 1;                        // Staker address in bytes
-    uint64 balance = 2;                       // Current balance in quarks
-    bool is_active = 3;                       // Whether the staker is active
-    uint64 nonce = 4;                         // Current nonce
-}
-
-/**
- * Represents the reply message for staker list
-*/
-message GetStakerListResp {
-    repeated StakerInfo stakers = 1;          // List of stakers
-    uint32 total_count = 2;                   // Total number of stakers
-    uint64 total_staked = 3;                  // Total staked amount in quarks
 }
 
 /**

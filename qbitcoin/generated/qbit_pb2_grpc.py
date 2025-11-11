@@ -5,7 +5,7 @@ import warnings
 
 import qbitcoin.generated.qbit_pb2 as qbit__pb2
 
-GRPC_GENERATED_VERSION = '1.72.1'
+GRPC_GENERATED_VERSION = '1.71.0'
 GRPC_VERSION = grpc.__version__
 _version_not_supported = False
 
@@ -112,16 +112,6 @@ class PublicAPIStub(object):
                 '/qrl.PublicAPI/GetChainStats',
                 request_serializer=qbit__pb2.GetChainStatsReq.SerializeToString,
                 response_deserializer=qbit__pb2.GetChainStatsResp.FromString,
-                _registered_method=True)
-        self.GetStakingStats = channel.unary_unary(
-                '/qrl.PublicAPI/GetStakingStats',
-                request_serializer=qbit__pb2.GetStakingStatsReq.SerializeToString,
-                response_deserializer=qbit__pb2.GetStakingStatsResp.FromString,
-                _registered_method=True)
-        self.GetStakerList = channel.unary_unary(
-                '/qrl.PublicAPI/GetStakerList',
-                request_serializer=qbit__pb2.GetStakerListReq.SerializeToString,
-                response_deserializer=qbit__pb2.GetStakerListResp.FromString,
                 _registered_method=True)
         self.GetAddressFromPK = channel.unary_unary(
                 '/qrl.PublicAPI/GetAddressFromPK',
@@ -341,18 +331,6 @@ class PublicAPIServicer(object):
         raise NotImplementedError('Method not implemented!')
 
     def GetChainStats(self, request, context):
-        """Missing associated documentation comment in .proto file."""
-        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
-        context.set_details('Method not implemented!')
-        raise NotImplementedError('Method not implemented!')
-
-    def GetStakingStats(self, request, context):
-        """Missing associated documentation comment in .proto file."""
-        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
-        context.set_details('Method not implemented!')
-        raise NotImplementedError('Method not implemented!')
-
-    def GetStakerList(self, request, context):
         """Missing associated documentation comment in .proto file."""
         context.set_code(grpc.StatusCode.UNIMPLEMENTED)
         context.set_details('Method not implemented!')
@@ -580,16 +558,6 @@ def add_PublicAPIServicer_to_server(servicer, server):
                     servicer.GetChainStats,
                     request_deserializer=qbit__pb2.GetChainStatsReq.FromString,
                     response_serializer=qbit__pb2.GetChainStatsResp.SerializeToString,
-            ),
-            'GetStakingStats': grpc.unary_unary_rpc_method_handler(
-                    servicer.GetStakingStats,
-                    request_deserializer=qbit__pb2.GetStakingStatsReq.FromString,
-                    response_serializer=qbit__pb2.GetStakingStatsResp.SerializeToString,
-            ),
-            'GetStakerList': grpc.unary_unary_rpc_method_handler(
-                    servicer.GetStakerList,
-                    request_deserializer=qbit__pb2.GetStakerListReq.FromString,
-                    response_serializer=qbit__pb2.GetStakerListResp.SerializeToString,
             ),
             'GetAddressFromPK': grpc.unary_unary_rpc_method_handler(
                     servicer.GetAddressFromPK,
@@ -1104,60 +1072,6 @@ class PublicAPI(object):
             '/qrl.PublicAPI/GetChainStats',
             qbit__pb2.GetChainStatsReq.SerializeToString,
             qbit__pb2.GetChainStatsResp.FromString,
-            options,
-            channel_credentials,
-            insecure,
-            call_credentials,
-            compression,
-            wait_for_ready,
-            timeout,
-            metadata,
-            _registered_method=True)
-
-    @staticmethod
-    def GetStakingStats(request,
-            target,
-            options=(),
-            channel_credentials=None,
-            call_credentials=None,
-            insecure=False,
-            compression=None,
-            wait_for_ready=None,
-            timeout=None,
-            metadata=None):
-        return grpc.experimental.unary_unary(
-            request,
-            target,
-            '/qrl.PublicAPI/GetStakingStats',
-            qbit__pb2.GetStakingStatsReq.SerializeToString,
-            qbit__pb2.GetStakingStatsResp.FromString,
-            options,
-            channel_credentials,
-            insecure,
-            call_credentials,
-            compression,
-            wait_for_ready,
-            timeout,
-            metadata,
-            _registered_method=True)
-
-    @staticmethod
-    def GetStakerList(request,
-            target,
-            options=(),
-            channel_credentials=None,
-            call_credentials=None,
-            insecure=False,
-            compression=None,
-            wait_for_ready=None,
-            timeout=None,
-            metadata=None):
-        return grpc.experimental.unary_unary(
-            request,
-            target,
-            '/qrl.PublicAPI/GetStakerList',
-            qbit__pb2.GetStakerListReq.SerializeToString,
-            qbit__pb2.GetStakerListResp.FromString,
             options,
             channel_credentials,
             insecure,

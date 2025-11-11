@@ -33,7 +33,6 @@ from qbitcoin.core.txs.TokenTransaction import TokenTransaction
 from qbitcoin.core.txs.TransferTokenTransaction import TransferTokenTransaction
 from qbitcoin.core.txs.TransferTransaction import TransferTransaction
 from qbitcoin.generated import qbit_pb2
-from qbitcoin.core.Staker import StakingManager
 
 
 class QbitcoinNode:
@@ -54,14 +53,8 @@ class QbitcoinNode:
         self._pow = None
 
         self.mining_address = mining_address
-        
-        # Initialize staking manager
-        self.staking_manager = StakingManager()
-        self._last_sync_state = ESyncState.unknown
 
         reactor.callLater(10, self.monitor_chain_state)
-        # Monitor sync state changes for staking
-        reactor.callLater(5, self.monitor_sync_state)
 
     ####################################################
     ####################################################
@@ -183,29 +176,9 @@ class QbitcoinNode:
             channel.send_get_headerhash_list(self._chain_manager.height)
         reactor.callLater(config.user.chain_state_broadcast_period, self.monitor_chain_state)
 
-    def monitor_sync_state(self):
-        """Monitor sync state changes and notify staking manager when synced"""
-        current_state = self.state
-        
-        # Check if sync state changed to synced
-        if (self._last_sync_state != ESyncState.synced.value and 
-            current_state == ESyncState.synced.value and
-            self.num_connections > 0):
-            logger.info("Node synced with %d peer connections - notifying staking manager", self.num_connections)
-            self.staking_manager.on_node_synced()
-            
-        self._last_sync_state = current_state
-        
-        # Continue monitoring every 5 seconds
-        reactor.callLater(5, self.monitor_sync_state)
-
     # FIXME: REMOVE. This is temporary
     def set_chain_manager(self, chain_manager: ChainManager):
         self._chain_manager = chain_manager
-        # Configure staking manager
-        self.staking_manager.set_chain_manager(chain_manager)
-        dev_config = chain_manager.get_config_by_block_number(chain_manager.height)
-        self.staking_manager.set_dev_config(dev_config)
 
     ####################################################
     ####################################################
@@ -229,9 +202,6 @@ class QbitcoinNode:
 
         self.peer_manager.set_p2p_factory(self._p2pfactory)
         self._p2pfactory.start_listening()
-        
-        # Configure staking manager with P2P factory
-        self.staking_manager.set_p2p_factory(self._p2pfactory)
 
     ####################################################
     ####################################################
@@ -243,83 +213,6 @@ class QbitcoinNode:
         # FIXME: Refactored code. Review Decimal usage all over the code
         Decimal(amount_str)
         return True
-
-    ####################################################
-    ####################################################
-    # STAKING METHODS
-    ####################################################
-    ####################################################
-
-    def start_staking(self, address: bytes) -> bool:
-        """
-        Start staking for the given address
-        
-        Args:
-            address: Address to start staking
-            
-        Returns:
-            bool: True if staking started successfully
-        """
-        return self.staking_manager.add_staker(address)
-        
-    def stop_staking(self, address: bytes) -> bool:
-        """
-        Stop staking for the given address
-        
-        Args:
-            address: Address to stop staking
-            
-        Returns:
-            bool: True if staking stopped successfully
-        """
-        return self.staking_manager.remove_staker(address, "manual_stop")
-        
-    def load_donor_wallet(self, password: str) -> bool:
-        """
-        Load donor wallet with password
-        
-        Args:
-            password: Password to decrypt donor wallet
-            
-        Returns:
-            bool: True if donor wallet was loaded successfully
-        """
-        try:
-            return self.staking_manager.load_donor_wallet(password)
-        except Exception as e:
-            logger.error("Failed to load donor wallet: %s", str(e))
-            return False
-            
-    def get_staking_info(self) -> dict:
-        """
-        Get current staking information
-        
-        Returns:
-            dict: Staking statistics and information
-        """
-        return self.staking_manager.get_staking_statistics()
-        
-    def get_staker_list(self) -> dict:
-        """
-        Get list of active stakers
-        
-        Returns:
-            dict: Dictionary of active stakers
-        """
-        active_stakers = self.staking_manager.get_active_stakers()
-        result = {}
-        for address, stake_info in active_stakers.items():
-            result[bin2hstr(address)] = stake_info.serialize()
-        return result
-        
-    def update_staker_heartbeat(self, address: bytes):
-        """
-        Update heartbeat for a staker to mark them as online
-        
-        Args:
-            address: Staker's address
-        """
-        self.staking_manager.update_staker_online_status(address)
 
     ####################################################
     ####################################################
