@@ -3,7 +3,16 @@
 # file LICENSE or http://www.opensource.org/licenses/mit-license.php.
 import sys
 import os
-sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '../..')))
+
+# Add the project root to Python path - fix for direct execution
+current_dir = os.path.dirname(os.path.abspath(__file__))
+project_root = os.path.dirname(current_dir)  # Go up one level from qbitcoin/ to project root
+if project_root not in sys.path:
+    sys.path.insert(0, project_root)
+
+# Also add current directory to path for relative imports
+if current_dir not in sys.path:
+    sys.path.insert(0, current_dir)
 
 
 
@@ -39,10 +48,58 @@ def api_proxy(api_method_name):
     for arg in request.args:
         if arg not in api_method.input_type.fields_by_name:
             raise Exception('Invalid args %s', arg)
+        field = api_method.input_type.fields_by_name[arg]
         data_type = type(getattr(api_request, arg))
+        
         if data_type == bool and request.args[arg].lower() == 'false':
             continue
-        value = data_type(request.args.get(arg, type=data_type))
+        
+        arg_value = request.args.get(arg)
+        if arg_value is None or arg_value == '':
+            continue
+            
+        # Special handling for transaction_signed field - it expects a Transaction protobuf object
+        if arg == 'transaction_signed':
+            try:
+                print(f"DEBUG: Parsing transaction_signed, hex length: {len(arg_value)}")
+                # Convert hex string to bytes
+                transaction_bytes = bytes.fromhex(arg_value)
+                print(f"DEBUG: Transaction bytes length: {len(transaction_bytes)}")
+                # Parse the bytes as a Transaction protobuf
+                transaction_obj = qbit_pb2.Transaction()
+                transaction_obj.ParseFromString(transaction_bytes)
+                print(f"DEBUG: Successfully parsed transaction protobuf")
+                
+                # Use CopyFrom to copy the transaction into the request
+                api_request.transaction_signed.CopyFrom(transaction_obj)
+                print(f"DEBUG: Successfully copied transaction to request")
+                continue  # Skip normal setattr
+            except Exception as e:
+                print(f"DEBUG: Failed to parse transaction protobuf: {e}")
+                raise Exception(f'Invalid transaction format for {arg}: {str(e)}')
+            
+        # Handle bytes fields specially - expect hex string input or Q-address format
+        elif data_type == bytes:
+            try:
+                # Handle Q-address format (Qbitcoin address)
+                if arg_value.startswith('Q'):
+                    # Validate Q-address format
+                    if len(arg_value) != 51:  # Q + 50 hex chars
+                        raise ValueError(f'Invalid Q-address length: {len(arg_value)}, expected 51')
+                    # Remove 'Q' prefix and convert hex to bytes using pyqrllib
+                    from pyqrllib.pyqrllib import hstr2bin
+                    value = bytes(hstr2bin(arg_value[1:]))
+                else:
+                    # Handle raw hex input (backwards compatibility)
+                    if len(arg_value) == 70:  # Old test format, reject it
+                        raise ValueError(f'Invalid address format. Use Q-prefixed addresses (e.g., Q015b13be...). Length: {len(arg_value)}')
+                    # For other hex fields, convert normally
+                    value = bytes.fromhex(arg_value)
+            except ValueError as e:
+                raise Exception(f'Invalid address format for {arg}: {arg_value}. Use Q-prefixed addresses (e.g., Q015b13be...). Error: {str(e)}')
+        else:
+            value = data_type(arg_value)
+        
         setattr(api_request, arg, value)
 
     resp = getattr(stub, api_method_name)(api_request, timeout=10)
@@ -61,13 +118,20 @@ def get_public_stub():
 
 @api.dispatcher.add_method
 def getlastblockheader(height=0):
-    stub = get_mining_stub()
-    # If no height specified or height is 0, get the latest block
-    # Otherwise get the specific height
-    if height is None:
-        height = 0  # This will get latest block
-    request = qbitmining_pb2.GetLastBlockHeaderReq(height=height)
-    grpc_response = stub.GetLastBlockHeader(request=request, timeout=10)
+    try:
+        stub = get_mining_stub()
+        # If no height specified or height is 0, get the latest block
+        # Otherwise get the specific height
+        if height is None:
+            height = 0  # This will get latest block
+        request = qbitmining_pb2.GetLastBlockHeaderReq(height=height)
+        grpc_response = stub.GetLastBlockHeader(request=request, timeout=10)
+    except Exception as e:
+        return {
+            "error": "Mining API not available",
+            "details": str(e),
+            "status": "ERROR"
+        }
 
     block_header = {
         'difficulty': grpc_response.difficulty,
@@ -110,15 +174,22 @@ def getblockheaderbyheight(height):
 
 @api.dispatcher.add_method
 def getblocktemplate(reserve_size, wallet_address):
-    stub = get_mining_stub()
-    # Convert wallet address from hex string to bytes, handling Q prefix
-    if wallet_address.startswith('Q'):
-        wallet_addr_bytes = bytes(hstr2bin(wallet_address[1:]))  # Skip 'Q' prefix
-    else:
-        wallet_addr_bytes = bytes(hstr2bin(wallet_address))
-    
-    request = qbitmining_pb2.GetBlockToMineReq(wallet_address=wallet_addr_bytes)
-    grpc_response = stub.GetBlockToMine(request=request, timeout=10)
+    try:
+        stub = get_mining_stub()
+        # Convert wallet address from hex string to bytes, handling Q prefix
+        if wallet_address.startswith('Q'):
+            wallet_addr_bytes = bytes(hstr2bin(wallet_address[1:]))  # Skip 'Q' prefix
+        else:
+            wallet_addr_bytes = bytes(hstr2bin(wallet_address))
+        
+        request = qbitmining_pb2.GetBlockToMineReq(wallet_address=wallet_addr_bytes)
+        grpc_response = stub.GetBlockToMine(request=request, timeout=10)
+    except Exception as e:
+        return {
+            "error": "Mining API not available or template generation failed",
+            "details": str(e),
+            "status": "ERROR"
+        }
     resp = {
         'blocktemplate_blob': grpc_response.blocktemplate_blob,
         'difficulty': grpc_response.difficulty,
@@ -142,16 +213,19 @@ def getheight():
 
 @api.dispatcher.add_method
 def submitblock(blob):
-    stub = get_mining_stub()
     try:
+        stub = get_mining_stub()
         request = qbitmining_pb2.SubmitMinedBlockReq(blob=bytes(hstr2bin(blob)))
         response = stub.SubmitMinedBlock(request=request, timeout=10)
         if response.error:
-            raise Exception("Block submission rejected by node")
+            return {'status': 'ERROR', 'error': 'Block submission rejected by node'}
         return {'status': 'OK', 'error': 0}
     except Exception as e:
-        # Provide more detailed error message
-        raise Exception(f"Block submission failed: {str(e)}")
+        return {
+            "error": "Mining API not available or block submission failed",
+            "details": str(e),
+            "status": "ERROR"
+        }
 
 
 @api.dispatcher.add_method
@@ -166,7 +240,7 @@ app.add_url_rule('/json_rpc', 'api', api.as_view(), methods=['POST'])
 
 
 def parse_arguments():
-    parser = argparse.ArgumentParser(description='QRL node')
+    parser = argparse.ArgumentParser(description='QBitcoin node')
     parser.add_argument('--qrldir', '-d', dest='qrl_dir', default=config.user.qrl_dir,
                         help="Use a different directory for node data/configuration")
     parser.add_argument('--network-type', dest='network_type', choices=['mainnet', 'testnet'],

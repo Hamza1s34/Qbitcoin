@@ -1091,10 +1091,8 @@ class ChainManager:
                 logger.warning('%s actual: %s expected: %s', tx.addr_from, tx.nonce, addr_from_pk_state.nonce)
                 return False
 
-            if not state_container.paginated_bitfield.load_bitfield_and_ots_key_reuse(addr_from_pk_state.address, tx.ots_key):
-                logger.warning('pubkey reuse not detected: invalid tx %s', bin2hstr(tx.txhash))
-                logger.warning('subtype: %s', tx.type)
-                return False
+            # OTS key reuse check removed - Falcon signatures don't use OTS keys
+            # The old OTS check was causing fork recovery failures after Falcon migration
 
             if not tx.revert(self._state, state_container):
                 return False

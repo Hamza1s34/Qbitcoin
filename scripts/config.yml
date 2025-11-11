@@ -1,0 +1,242 @@
+# ============================================================
+# QBitcoin Public Node Configuration
+# ============================================================
+# This configuration enables all services to run on public interfaces (0.0.0.0)
+# allowing external connections from any network interface.
+#
+# ⚠️ SECURITY WARNING:
+# This configuration exposes all APIs publicly. Use with caution!
+# Consider implementing:
+# - Firewall rules (ufw, iptables)
+# - Reverse proxy with authentication (nginx, caddy)
+# - VPN or private network access
+# - Rate limiting
+# - DDoS protection
+# ============================================================
+
+# ============================================================
+# MINING CONFIGURATION
+# ============================================================
+mining_enabled: false                # Set to true to enable mining
+mining_address: ''                   # Your mining reward address (Q-address)
+mining_thread_count: 0               # 0 = auto-detect CPU cores
+
+# ============================================================
+# PEER-TO-PEER NETWORK CONFIGURATION
+# ============================================================
+max_redundant_connections: 5         # Max connections from same IP
+enable_peer_discovery: true          # Auto-discover new peers
+
+# Seed nodes for initial connection
+peer_list:
+  - "134.122.79.166"
+  - "220.158.73.254"
+  - "98.84.96.236"
+
+p2p_local_port: 19000               # P2P listening port
+p2p_public_port: 19000              # Public P2P port (for port forwarding)
+
+peer_rate_limit: 500                # Max messages per minute per peer
+p2p_q_size: 10000                   # P2P queue size
+outgoing_message_expiry: 90         # Message expiry in seconds
+
+# Network time synchronization
+ntp_servers:
+  - 'pool.ntp.org'
+  - 'ntp.ubuntu.com'
+ntp_refresh: 43200                  # 12 hours (in seconds)
+ntp_request_timeout: 10             # 10 seconds
+
+ban_minutes: 20                     # Ban duration for misbehaving peers
+monitor_connections_interval: 30    # Check connections every 30 seconds
+max_peers_limit: 100                # Maximum peer connections
+chain_state_timeout: 180            # Chain state timeout
+chain_state_broadcast_period: 30    # Broadcast chain state every 30 seconds
+
+# ============================================================
+# TRANSACTION POOL CONFIGURATION
+# ============================================================
+transaction_minimum_fee: 100000     # Minimum fee: 0.0001 Qbitcoin (in quarks)
+transaction_pool_size: 25000        # Main transaction pool size
+pending_transaction_pool_size: 75000 # Pending transaction pool size
+stale_transaction_threshold: 15     # Blocks before transaction is stale
+
+# ============================================================
+# ADMIN API - Node Administration
+# ============================================================
+# Full node control and administration capabilities
+admin_api_enabled: false            # ⚠️ Enable with caution - full node control
+admin_api_host: "127.0.0.1"          
+admin_api_port: 19008              # Admin API port
+admin_api_threads: 1               # Number of API threads
+admin_api_max_concurrent_rpc: 100  # Max concurrent RPC calls
+
+# ============================================================
+# PUBLIC API - Blockchain Queries (gRPC)
+# ============================================================
+# Main public API for blockchain data access
+public_api_enabled: true            # Enable public API
+public_api_host: "0.0.0.0"         # Listen on all interfaces (PUBLIC)
+public_api_port: 19009             # Public API port
+public_api_threads: 1              # Number of API threads
+public_api_max_concurrent_rpc: 100 # Max concurrent RPC calls
+
+# ============================================================
+# MINING API - Mining Operations
+# ============================================================
+# API for miners to get work and submit solutions
+mining_api_enabled: true            # Enable mining API
+mining_api_host: "0.0.0.0"         # Listen on all interfaces (PUBLIC)
+mining_api_port: 19007             # Mining API port
+mining_api_threads: 1              # Number of API threads
+mining_api_max_concurrent_rpc: 100 # Max concurrent RPC calls
+
+# ============================================================
+# DEBUG API - Debugging and Diagnostics
+# ============================================================
+# Advanced debugging capabilities for development
+debug_api_enabled: true             # Enable debug API
+debug_api_host: "0.0.0.0"          # Listen on all interfaces (PUBLIC)
+debug_api_port: 52134              # Debug API port
+debug_api_threads: 1               # Number of API threads
+debug_api_max_concurrent_rpc: 100  # Max concurrent RPC calls
+
+# ============================================================
+# GRPC PROXY - HTTP/WebSocket to gRPC Bridge
+# ============================================================
+# Enables web browsers and HTTP clients to access gRPC services
+grpc_proxy_host: "0.0.0.0"         # Listen on all interfaces (PUBLIC)
+grpc_proxy_port: 18090             # gRPC Proxy port
+
+# ============================================================
+# WALLET DAEMON CONFIGURATION
+# ============================================================
+# Backend service for wallet management
+public_api_server: "127.0.0.1:19009" # Connect to local public API
+wallet_daemon_host: "0.0.0.0"      # Listen on all interfaces (PUBLIC)
+wallet_daemon_port: 18091          # Wallet daemon port
+number_of_slaves: 3                # Number of slave keys per wallet
+
+# ============================================================
+# WALLET API - Wallet Operations
+# ============================================================
+# Public wallet API for wallet management and transactions
+wallet_api_host: "0.0.0.0"         # Listen on all interfaces (PUBLIC)
+wallet_api_port: 19010             # Wallet API port
+wallet_api_threads: 1              # Number of API threads
+wallet_api_max_concurrent_rpc: 100 # Max concurrent RPC calls
+
+# ============================================================
+# SERVICE SUMMARY
+# ============================================================
+# After starting with this config, the following services will be available:
+#
+# Service                | Port  | Protocol | Purpose
+# -----------------------|-------|----------|----------------------------------
+# P2P Network           | 19000 | TCP      | Node-to-node communication
+# Mining API            | 19007 | gRPC     | Mining operations
+# Admin API             | 19008 | gRPC     | Node administration
+# Public API            | 19009 | gRPC     | Blockchain queries
+# Wallet API            | 19010 | gRPC     | Wallet operations
+# gRPC Proxy            | 18090 | HTTP/WS  | Web access to gRPC services
+# Wallet Daemon         | 18091 | Internal | Wallet management backend
+# Debug API             | 52134 | gRPC     | Debugging and diagnostics
+#
+# ============================================================
+# FIREWALL CONFIGURATION EXAMPLE (Ubuntu/Debian with UFW)
+# ============================================================
+# sudo ufw allow 19000/tcp comment "QBitcoin P2P"
+# sudo ufw allow 19007/tcp comment "QBitcoin Mining API"
+# sudo ufw allow 19008/tcp comment "QBitcoin Admin API"
+# sudo ufw allow 19009/tcp comment "QBitcoin Public API"
+# sudo ufw allow 19010/tcp comment "QBitcoin Wallet API"
+# sudo ufw allow 18090/tcp comment "QBitcoin gRPC Proxy"
+# sudo ufw allow 52134/tcp comment "QBitcoin Debug API"
+# sudo ufw enable
+#
+# ============================================================
+# NGINX REVERSE PROXY EXAMPLE (with SSL/TLS and auth)
+# ============================================================
+# server {
+#     listen 443 ssl http2;
+#     server_name node.yourdomain.com;
+#     
+#     ssl_certificate /path/to/cert.pem;
+#     ssl_certificate_key /path/to/key.pem;
+#     
+#     # Public API
+#     location /api/ {
+#         auth_basic "QBitcoin Node";
+#         auth_basic_user_file /etc/nginx/.htpasswd;
+#         grpc_pass grpc://127.0.0.1:19009;
+#     }
+#     
+#     # gRPC Proxy (for web clients)
+#     location /grpc/ {
+#         proxy_pass http://127.0.0.1:18090;
+#         proxy_http_version 1.1;
+#         proxy_set_header Upgrade $http_upgrade;
+#         proxy_set_header Connection "upgrade";
+#     }
+# }
+#
+# ============================================================
+# USAGE INSTRUCTIONS
+# ============================================================
+# 1. Save this file as ~/.qbitcoin/config.yml
+#    OR specify path: python start_qbitcoin.py --config /path/to/config.yml
+#
+# 2. Start the node:
+#    python start_qbitcoin.py
+#
+# 3. Test services:
+#    # Check if node is running
+#    curl http://YOUR_IP:18090/api/v1/health
+#    
+#    # Check blockchain height (via gRPC proxy)
+#    curl http://YOUR_IP:18090/api/GetNodeInfo
+#
+# 4. Monitor logs:
+#    tail -f ~/.qbitcoin/qrl.log
+#
+# 5. For production use:
+#    - Set up firewall rules
+#    - Configure reverse proxy with SSL
+#    - Implement authentication
+#    - Set up monitoring and alerts
+#    - Regular backups of wallet files
+#
+# ============================================================
+# SECURITY BEST PRACTICES
+# ============================================================
+# 1. Change default ports if possible
+# 2. Use strong firewall rules - only open necessary ports
+# 3. Implement rate limiting at firewall/proxy level
+# 4. Use VPN or private network when possible
+# 5. Enable SSL/TLS for all public APIs
+# 6. Implement authentication for sensitive endpoints
+# 7. Monitor logs for suspicious activity
+# 8. Keep software updated
+# 9. Regular security audits
+# 10. Use fail2ban or similar for brute-force protection
+#
+# ============================================================
+# TROUBLESHOOTING
+# ============================================================
+# If services don't start:
+# 1. Check if ports are already in use:
+#    sudo netstat -tulpn | grep -E "19000|19007|19008|19009|19010|18090|18091|52134"
+#
+# 2. Check logs:
+#    tail -f ~/.qbitcoin/qrl.log
+#
+# 3. Test connectivity:
+#    telnet YOUR_IP PORT
+#
+# 4. Verify configuration:
+#    python start_qbitcoin.py --validate-config
+#
+# 5. Check firewall:
+#    sudo ufw status
+#
+# ============================================================
