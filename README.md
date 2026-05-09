@@ -9,36 +9,7 @@
 A professional-grade, quantum-resistant blockchain built from scratch in Python using Falcon-512. QBitcoin secures digital assets in the post-quantum era, featuring a robust wallet, transaction system, mining capabilities, and a modern web-based GUI.
 
 ---
-
-> ## 🔴 This Project is For Sale — $12,000 USD
->
-> QBitcoin is available for acquisition as a complete, turnkey blockchain project.
->
-> **What's included:**
-> - Full blockchain node source code (Python)
-> - Web wallet + Desktop wallet + Mobile wallet source code
-> - Block explorer source code
-> - Live website + domain (qbitcoin.live) + email
-> - PyPI package + brand assets + logo
-> - 1,500,000 QBC coins (founder allocation)
-> - All social media accounts
-> - 30 days post-sale technical support
->
-> **Why buy:**
-> - 8+ months stable mainnet — zero chain halts
-> - Live on Exbitron Exchange + rPlant mining pool
-> - ~3M QBC in active circulation
-> - One of the only deployed Falcon-512 blockchains in existence
-> - Previous private sale completed at $5,000 — current package includes significantly more
->
-> **Contact:** qbitcoin@qbitcoin.live
-> **Payment:** USDT / BTC / ETH
-> **Escrow:** Available for buyer protection
->
-> [📧 Email to inquire](mailto:qbitcoin@qbitcoin.live) | [🌐 Live Site](https://www.qbitcoin.live/) | [🌍 Explorer](https://explorer.qbitcoin.live/)
-
----
-
+ 
 ## Features
 
 - **Quantum-resistant cryptography** using Falcon-512 signatures (NIST PQC standard)
