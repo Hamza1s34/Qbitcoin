@@ -17,7 +17,7 @@ from qbitcoin.core import config
 from qbitcoin.core.AddressState import AddressState
 from qbitcoin.core.FalconHelper import falcon_pk_to_address
 from qbitcoin.daemon.helper import logger
-from qbitcoin.daemon.helper.DaemonHelper import WalletDecryptionError, Wallet, UNRESERVED_OTS_INDEX_START
+from qbitcoin.daemon.helper.DaemonHelper import WalletDecryptionError, Wallet
 from qbitcoin.services.WalletAPIService import WalletAPIService
 from qbitcoin.generated import qbit_pb2, qbit_pb2_grpc, qbitwallet_pb2
 from qbitcoin.generated.qbitwallet_pb2_grpc import add_WalletAPIServicer_to_server
@@ -182,47 +182,28 @@ class WalletD:
             return
         self._wallet.encrypt_item(len(self._wallet.address_items) - 1, self._passphrase)
 
-    def _get_wallet_index_xmss(self, signer_address: str, ots_index: int):
+    def _get_wallet_index_falcon(self, signer_address: str):
         index, _ = self._wallet.get_address_item(signer_address)
         if index is None:
             raise Exception("Signer Address Not Found ", signer_address)
-        xmss = self._wallet.get_xmss_by_index(index, self._passphrase)
-        if ots_index > 0:
-            xmss.set_ots_index(ots_index)
-        return index, xmss
+        falcon_data = self._wallet.get_falcon_by_index(index, self._passphrase)
+        return index, falcon_data
 
-    def get_pk_list_from_xmss_list(self, slave_xmss_list):
-        return [xmss.pk for xmss in slave_xmss_list]
+    def get_pk_list_from_falcon_list(self, slave_falcon_list):
+        return [falcon_data['public_key'] for falcon_data in slave_falcon_list]
 
-    def add_new_address(self, height=10, hash_function='shake128') -> str:
+    def add_new_address(self, force=False) -> str:
         self.authenticate()
 
-        if not hash_function:
-            hash_function = 'shake128'
-
-        if not height:
-            height = 10
-
-        self._wallet.add_new_address(height, hash_function, True)
+        falcon_data = self._wallet.add_new_address(force)
         self._encrypt_last_item()
         self._wallet.save()
         logger.info("Added New Address")
         return self._wallet.address_items[-1].qaddress
 
     def add_new_address_with_slaves(self,
-                                    height=10,
-                                    number_of_slaves=config.user.number_of_slaves,
-                                    hash_function='shake128') -> str:
+                                    number_of_slaves=config.user.number_of_slaves) -> str:
         self.authenticate()
-
-        if not hash_function:
-            hash_function = 'shake128'
-
-        if not height:
-            height = 10
-
-        if height < 6:
-            raise Exception("Height cannot be less than 6")
 
         if not number_of_slaves:
             number_of_slaves = config.user.number_of_slaves
@@ -230,41 +211,44 @@ class WalletD:
         if number_of_slaves > 100:
             raise Exception("Number of slaves cannot be more than 100")
 
-        xmss = self._wallet.add_new_address(height, hash_function, True)
-        slave_xmss_list = self._wallet.add_slave(index=-1,
-                                                 height=height,
-                                                 number_of_slaves=number_of_slaves,
-                                                 hash_function=hash_function,
-                                                 force=True)
+        falcon_data = self._wallet.add_new_address(True)
+        slave_falcon_list = self._wallet.add_slave(index=-1,
+                                                   number_of_slaves=number_of_slaves,
+                                                   force=True)
         self._encrypt_last_item()
 
-        slave_pk_list = self.get_pk_list_from_xmss_list(slave_xmss_list)
-        slave_tx = self.generate_slave_tx(xmss.pk, slave_pk_list)
-        self.sign_and_push_transaction(slave_tx, xmss, -1)
+        slave_pk_list = self.get_pk_list_from_falcon_list(slave_falcon_list)
+        slave_tx = self.generate_slave_tx(falcon_data['public_key'], slave_pk_list)
+        self.sign_and_push_transaction(slave_tx, falcon_data, -1)
 
         self._wallet.save()
         logger.info("Added New Address With Slaves")
         return self._wallet.address_items[-1].qaddress
 
-    def add_address_from_seed(self, seed=None) -> str:
+    def add_address_from_keys(self, private_key_hex: str, public_key_hex: str) -> str:
         self.authenticate()
 
-        words = seed.split()
-        if len(words) == 34:
-            bin_seed = mnemonic2bin(seed)
-        elif len(seed) == 102:
-            bin_seed = hstr2bin(seed)
-        else:
-            raise ValueError("Invalid Seed")
+        try:
+            private_key_bytes = bytes.fromhex(private_key_hex)
+            public_key_bytes = bytes.fromhex(public_key_hex)
+        except ValueError:
+            raise ValueError("Invalid key format")
 
-        address_from_seed = XMSS.from_extended_seed(bin_seed)
-        if self._wallet.get_xmss_by_qaddress(address_from_seed.qaddress, self._passphrase):
+        # Verify the keys are valid Falcon-512 keys
+        if len(private_key_bytes) != 1281 or len(public_key_bytes) != 897:
+            raise ValueError("Invalid Falcon-512 key sizes")
+
+        address = falcon_pk_to_address(public_key_bytes)
+        qaddress = 'Q' + address.hex()
+        
+        if self._wallet.get_falcon_by_qaddress(qaddress, self._passphrase):
             raise Exception("Address is already in the wallet")
-        self._wallet.append_xmss(address_from_seed)
+        
+        self._wallet.append_falcon(private_key_bytes, public_key_bytes)
         self._encrypt_last_item()
         self._wallet.save()
 
-        return address_from_seed.qaddress
+        return qaddress
 
     def list_address(self) -> list:
         self.authenticate()
@@ -292,10 +276,10 @@ class WalletD:
     def get_recovery_seeds(self, qaddress: str):
         self.authenticate()
 
-        xmss = self._wallet.get_xmss_by_qaddress(qaddress, self._passphrase)
-        if xmss:
+        falcon_data = self._wallet.get_falcon_by_qaddress(qaddress, self._passphrase)
+        if falcon_data:
             logger.info("Recovery seeds requested for %s", qaddress)
-            return xmss.hexseed, xmss.mnemonic
+            return falcon_data['private_key'].hex(), falcon_data['public_key'].hex()
 
         raise ValueError("No such address found in wallet")
 
@@ -312,54 +296,41 @@ class WalletD:
 
     def sign_and_push_transaction(self,
                                   tx,
-                                  xmss,
+                                  falcon_data,
                                   index,
                                   group_index=None,
                                   slave_index=None,
                                   enable_save=True):
-        logger.info("Signing %s transaction by %s | OTS index %s", tx.type, xmss.qaddress, xmss.ots_index)
-        tx.sign(xmss)
+        logger.info("Signing %s transaction by %s", tx.type, falcon_data['address'])
+        # Use Falcon signature for signing
+        from qbitcoin.crypto.falcon import FalconSignature
+        signature = FalconSignature.sign_message(tx.get_hashable_bytes(), falcon_data['private_key'])
+        tx.signature = signature
+        tx.public_key = falcon_data['public_key']
+        
         if not tx.validate(True):
             raise Exception("Invalid Transaction")
 
-        if enable_save:
-            if slave_index is None:  # noqa
-                self._wallet.set_ots_index(index, xmss.ots_index)  # Move to next OTS index before broadcasting txn
-            else:
-                self._wallet.set_slave_ots_index(index, group_index, slave_index, xmss.ots_index)
+        # Falcon-512 doesn't use OTS indices, so we don't need to update them
 
         push_transaction_req = qbit_pb2.PushTransactionReq(transaction_signed=tx.pbdata)
         push_transaction_resp = self._public_stub.PushTransaction(push_transaction_req, timeout=CONNECTION_TIMEOUT)
         if push_transaction_resp.error_code != qbit_pb2.PushTransactionResp.SUBMITTED:
             raise Exception(push_transaction_resp.error_description)
 
-    def try_txn_with_last_slave(self, item, index, group_index, xmss=None):
+    def try_txn_with_last_slave(self, item, index, group_index, falcon_data=None):
         slave = item.slaves[group_index][-1]
 
-        # Ignore usage of last 5 ots indexes for the last slave in slave group
-        if slave.index >= 2 ** slave.height - 5:
-            return None
-
+        # Falcon-512 doesn't use OTS indices or height
         slave_index = len(item.slaves[group_index]) - 1
-        slave_address_state = self.get_address_state(slave.qaddress)
-
-        ots_index = slave_address_state.get_unused_ots_index(slave.index)
-
-        if ots_index is None:  # noqa
-            self._wallet.set_slave_ots_index(index,
-                                             group_index,
-                                             slave_index,
-                                             2 ** slave.height)
-            return None
-        if not xmss:
+        if not falcon_data:
             target_address_item = slave
             if self._passphrase:
                 target_address_item = self._wallet.decrypt_address_item(slave, self._passphrase)
-            xmss = self._wallet.get_xmss_by_item(target_address_item, ots_index)
-        else:
-            xmss.set_ots_index(ots_index)
+            falcon_data = self._wallet.get_falcon_by_item(target_address_item)
+        # Falcon-512 doesn't use OTS indices
 
-        return xmss
+        return falcon_data
 
     def is_slave(self, master_address: bytes, slave_pk: bytes) -> bool:
         request = qbit_pb2.IsSlaveReq(master_address=master_address,
@@ -386,7 +357,7 @@ class WalletD:
         address_state = self.get_address_state(master_qaddress)
 
         slave = item.slaves[-1][0]
-        if not address_state.validate_slave_with_access_type(str(bytes(hstr2bin(slave.pk))), [0]):
+        if not address_state.validate_slave_with_access_type(str(bytes.fromhex(slave.public_key)), [0]):
             if len(item.slaves) == 1:
                 qaddress = item.qaddress
                 target_address_item = item
@@ -396,91 +367,52 @@ class WalletD:
                 target_address_item = item.slaves[-2][-1]
                 group_index = -2
 
-            address_state = self.get_address_state(qaddress)
-            ots_index = address_state.get_unused_ots_index()
-
-            if ots_index >= UNRESERVED_OTS_INDEX_START:
-                raise Exception('Fatal Error!!! No reserved OTS index found')
+            # Falcon-512 doesn't use OTS indices, so we don't need to check this
+            pass
 
             if self._passphrase:
                 target_address_item = self._wallet.decrypt_address_item(target_address_item, self._passphrase)
 
-            xmss = self._wallet.get_xmss_by_item(target_address_item, ots_index)
+            falcon_data = self._wallet.get_falcon_by_item(target_address_item)
 
-            slaves_pk = [bytes(hstr2bin(slave_item.pk)) for slave_item in item.slaves[-1]]
-            tx = self.generate_slave_tx(xmss.pk,
+            slaves_pk = [bytes.fromhex(slave_item.public_key) for slave_item in item.slaves[-1]]
+            tx = self.generate_slave_tx(falcon_data['public_key'],
                                         slaves_pk,
                                         self.qaddress_to_address(master_qaddress))
 
             self.sign_and_push_transaction(tx,
-                                           xmss,
+                                           falcon_data,
                                            index,
                                            enable_save=False)
 
             if len(item.slaves) > 1:
-                if self.try_txn_with_last_slave(item, index, group_index, xmss):
-                    return index, len(item.slaves) - 2, len(item.slaves[group_index]) - 1, xmss
+                if self.try_txn_with_last_slave(item, index, group_index, falcon_data):
+                    return index, len(item.slaves) - 2, len(item.slaves[group_index]) - 1, falcon_data
 
         else:
             if len(item.slaves) > 1:
                 group_index = len(item.slaves) - 2
-                xmss = self.try_txn_with_last_slave(item, index, group_index)
-                if xmss:
-                    return index, group_index, len(item.slaves[group_index]) - 1, xmss
+                falcon_data = self.try_txn_with_last_slave(item, index, group_index)
+                if falcon_data:
+                    return index, group_index, len(item.slaves[group_index]) - 1, falcon_data
             group_index = len(item.slaves) - 1
             last_slaves = item.slaves[-1]
             for slave_index, slave in enumerate(last_slaves):
-                # Check if all ots index has been marked as used
-                if slave.index > 2 ** slave.height - 1:
-                    continue
-
-                # Ignore usage of last 5 ots indexes for the last slave in slave group
-                if slave_index + 1 == len(last_slaves) and slave.index >= 2 ** slave.height - 5:
-                    continue
-
+                # Falcon-512 doesn't use OTS indices or height, so we can use any slave
                 if self._passphrase:
                     slave = self._wallet.decrypt_address_item(slave, self._passphrase)
 
-                slave_address_state = self.get_address_state(slave.qaddress)
+                slave_falcon = self._wallet.get_falcon_by_item(slave)
 
-                if slave_index + 1 == len(last_slaves) and slave.index > 2 ** slave.height - 100:
-
-                    ots_index = slave_address_state.get_unused_ots_index(0)
-                    if ots_index >= UNRESERVED_OTS_INDEX_START:
-                        raise Exception("Fatal Error, no unused reserved OTS index")
-
-                    curr_slave_xmss = self._wallet.get_xmss_by_item(slave, ots_index)
-
-                    slave_xmss_list = self._wallet.add_slave(index=index,
-                                                             height=slave.height,
-                                                             number_of_slaves=config.user.number_of_slaves,
-                                                             passphrase=self._passphrase,
-                                                             force=True)
-                    slave_pk_list = self.get_pk_list_from_xmss_list(slave_xmss_list)
-
-                    tx = self.generate_slave_tx(bytes(hstr2bin(slave.pk)),
-                                                slave_pk_list,
-                                                self.qaddress_to_address(item.qaddress))
-
-                    self.sign_and_push_transaction(tx,
-                                                   curr_slave_xmss,
-                                                   index,
-                                                   enable_save=False)
-
-                ots_index = slave_address_state.get_unused_ots_index(slave.index)
-
-                if ots_index is None:  # noqa
-                    self._wallet.set_slave_ots_index(index,
-                                                     group_index,
-                                                     slave_index,
-                                                     2 ** slave.height)
-                    continue
-
-                slave_xmss = self._wallet.get_xmss_by_item(slave, ots_index)
-
-                return index, group_index, slave_index, slave_xmss
+                return index, group_index, slave_index, slave_falcon
 
         return index, -1, -1, None
+
+    def get_slave_xmss(self, master_qaddress):
+        """
+        Get slave XMSS for a given master address
+        """
+        return self.get_slave(master_qaddress)
 
     # def get_slave(self, master_qaddress):
     #     index, item = self._wallet.get_address_item(master_qaddress)
@@ -591,9 +523,9 @@ class WalletD:
     #     return index, -1, -1, None
 
     def get_slave_xmss(self, master_qaddress):
-        index, group_index, slave_index, slave_xmss = self.get_slave(master_qaddress)
+        index, group_index, slave_index, slave_falcon = self.get_slave(master_qaddress)
 
-        return index, group_index, slave_index, slave_xmss
+        return index, group_index, slave_index, slave_falcon
 
     def get_slave_list(self, qaddress) -> list:
         self.authenticate()
@@ -602,19 +534,12 @@ class WalletD:
             raise Exception("Address Not Found ", qaddress)
         return addr_item.slaves
 
-    def verify_ots(self, signer_address, xmss, user_ots_index):
-        addr_state = self.get_address_state(signer_address)
-
-        verified_ots_index = self.get_unused_ots_index(addr_state.address, xmss.ots_index)
-
-        if verified_ots_index is None:  # noqa
-            raise Exception("No Unused OTS key found")
-
-        if user_ots_index > 0:
-            if verified_ots_index != xmss.ots_index:
-                raise Exception("Used OTS Index %s", user_ots_index)
-        else:
-            xmss.set_ots_index(verified_ots_index)
+    def verify_ots(self, signer_address, falcon_data, user_ots_index):
+        """
+        Falcon-512 doesn't use OTS indices, so this is a no-op for compatibility
+        """
+        # Falcon-512 doesn't use OTS indices, so we don't need to verify them
+        pass
 
     def relay_transfer_txn(self,
                            qaddresses_to: list,
@@ -624,17 +549,17 @@ class WalletD:
                            signer_address: str,
                            ots_index: int):
         self.authenticate()
-        index, xmss = self._get_wallet_index_xmss(signer_address, ots_index)
-        self.verify_ots(signer_address, xmss, user_ots_index=ots_index)
+        index, falcon_data = self._get_wallet_index_falcon(signer_address)
+        self.verify_ots(signer_address, falcon_data, user_ots_index=ots_index)
 
         tx = TransferTransaction.create(addrs_to=self.qaddresses_to_address(qaddresses_to),
                                         amounts=amounts,
                                         message_data=None,
                                         fee=fee,
-                                        xmss_pk=xmss.pk,
+                                        xmss_pk=falcon_data['public_key'],
                                         master_addr=self.qaddress_to_address(master_qaddress))
 
-        self.sign_and_push_transaction(tx, xmss, index)
+        self.sign_and_push_transaction(tx, falcon_data, index)
 
         return self.to_plain_transaction(tx.pbdata)
 
@@ -644,7 +569,7 @@ class WalletD:
                                     fee: int,
                                     master_qaddress):
         self.authenticate()
-        index, group_index, slave_index, slave_xmss = self.get_slave_xmss(master_qaddress)
+        index, group_index, slave_index, slave_falcon = self.get_slave_xmss(master_qaddress)
         if slave_index == -1:
             raise Exception("No Slave Found")
 
@@ -652,10 +577,10 @@ class WalletD:
                                         amounts=amounts,
                                         message_data=None,
                                         fee=fee,
-                                        xmss_pk=slave_xmss.pk,
+                                        xmss_pk=slave_falcon['public_key'],
                                         master_addr=self.qaddress_to_address(master_qaddress))
 
-        self.sign_and_push_transaction(tx, slave_xmss, index, group_index, slave_index)
+        self.sign_and_push_transaction(tx, slave_falcon, index, group_index, slave_index)
 
         return self.to_plain_transaction(tx.pbdata)
 
@@ -666,16 +591,16 @@ class WalletD:
                           signer_address: str,
                           ots_index: int):
         self.authenticate()
-        index, xmss = self._get_wallet_index_xmss(signer_address, ots_index)
-        self.verify_ots(signer_address, xmss, user_ots_index=ots_index)
+        index, falcon_data = self._get_wallet_index_falcon(signer_address)
+        self.verify_ots(signer_address, falcon_data, user_ots_index=ots_index)
 
         tx = MessageTransaction.create(message_hash=message.encode(),
                                        addr_to=None,
                                        fee=fee,
-                                       xmss_pk=xmss.pk,
+                                       xmss_pk=falcon_data['public_key'],
                                        master_addr=self.qaddress_to_address(master_qaddress))
 
-        self.sign_and_push_transaction(tx, xmss, index)
+        self.sign_and_push_transaction(tx, falcon_data, index)
 
         return self.to_plain_transaction(tx.pbdata)
 
@@ -684,17 +609,17 @@ class WalletD:
                                    fee: int,
                                    master_qaddress):
         self.authenticate()
-        index, group_index, slave_index, slave_xmss = self.get_slave_xmss(master_qaddress)
+        index, group_index, slave_index, slave_falcon = self.get_slave_xmss(master_qaddress)
         if slave_index == -1:
             raise Exception("No Slave Found")
 
         tx = MessageTransaction.create(message_hash=message.encode(),
                                        addr_to=None,
                                        fee=fee,
-                                       xmss_pk=slave_xmss.pk,
+                                       xmss_pk=slave_falcon['public_key'],
                                        master_addr=self.qaddress_to_address(master_qaddress))
 
-        self.sign_and_push_transaction(tx, slave_xmss, index, group_index, slave_index)
+        self.sign_and_push_transaction(tx, slave_falcon, index, group_index, slave_index)
 
         return self.to_plain_transaction(tx.pbdata)
 
@@ -714,8 +639,8 @@ class WalletD:
         if len(qaddresses) != len(amounts):
             raise Exception("Number of Addresses & Amounts Mismatch")
 
-        index, xmss = self._get_wallet_index_xmss(signer_address, ots_index)
-        self.verify_ots(signer_address, xmss, user_ots_index=ots_index)
+        index, falcon_data = self._get_wallet_index_falcon(signer_address)
+        self.verify_ots(signer_address, falcon_data, user_ots_index=ots_index)
 
         initial_balances = []
         for idx, qaddress in enumerate(qaddresses):
@@ -727,10 +652,10 @@ class WalletD:
                                      decimals=decimals,
                                      initial_balances=initial_balances,
                                      fee=fee,
-                                     xmss_pk=xmss.pk,
+                                     xmss_pk=falcon_data['public_key'],
                                      master_addr=self.qaddress_to_address(master_qaddress))
 
-        self.sign_and_push_transaction(tx, xmss, index)
+        self.sign_and_push_transaction(tx, falcon_data, index)
 
         return self.to_plain_transaction(tx.pbdata)
 
@@ -748,7 +673,7 @@ class WalletD:
         if len(qaddresses) != len(amounts):
             raise Exception("Number of Addresses & Amounts Mismatch")
 
-        index, group_index, slave_index, slave_xmss = self.get_slave_xmss(master_qaddress)
+        index, group_index, slave_index, slave_falcon = self.get_slave_xmss(master_qaddress)
         if slave_index == -1:
             raise Exception("No Slave Found")
 
@@ -762,10 +687,10 @@ class WalletD:
                                      decimals=decimals,
                                      initial_balances=initial_balances,
                                      fee=fee,
-                                     xmss_pk=slave_xmss.pk,
+                                     xmss_pk=slave_falcon['public_key'],
                                      master_addr=self.qaddress_to_address(master_qaddress))
 
-        self.sign_and_push_transaction(tx, slave_xmss, index, group_index, slave_index)
+        self.sign_and_push_transaction(tx, slave_falcon, index, group_index, slave_index)
 
         return self.to_plain_transaction(tx.pbdata)
 
@@ -778,17 +703,17 @@ class WalletD:
                                  signer_address: str,
                                  ots_index: int):
         self.authenticate()
-        index, xmss = self._get_wallet_index_xmss(signer_address, ots_index)
-        self.verify_ots(signer_address, xmss, user_ots_index=ots_index)
+        index, falcon_data = self._get_wallet_index_falcon(signer_address)
+        self.verify_ots(signer_address, falcon_data, user_ots_index=ots_index)
 
         tx = TransferTokenTransaction.create(token_txhash=bytes(hstr2bin(token_txhash)),
                                              addrs_to=self.qaddresses_to_address(qaddresses_to),
                                              amounts=amounts,
                                              fee=fee,
-                                             xmss_pk=xmss.pk,
+                                             xmss_pk=falcon_data['public_key'],
                                              master_addr=self.qaddress_to_address(master_qaddress))
 
-        self.sign_and_push_transaction(tx, xmss, index)
+        self.sign_and_push_transaction(tx, falcon_data, index)
 
         return self.to_plain_transaction(tx.pbdata)
 
@@ -799,7 +724,7 @@ class WalletD:
                                           fee: int,
                                           master_qaddress):
         self.authenticate()
-        index, group_index, slave_index, slave_xmss = self.get_slave_xmss(master_qaddress)
+        index, group_index, slave_index, slave_falcon = self.get_slave_xmss(master_qaddress)
         if slave_index == -1:
             raise Exception("No Slave Found")
 
@@ -807,10 +732,10 @@ class WalletD:
                                              addrs_to=self.qaddresses_to_address(qaddresses_to),
                                              amounts=amounts,
                                              fee=fee,
-                                             xmss_pk=slave_xmss.pk,
+                                             xmss_pk=slave_falcon['public_key'],
                                              master_addr=self.qaddress_to_address(master_qaddress))
 
-        self.sign_and_push_transaction(tx, slave_xmss, index, group_index, slave_index)
+        self.sign_and_push_transaction(tx, slave_falcon, index, group_index, slave_index)
 
         return self.to_plain_transaction(tx.pbdata)
 
@@ -822,16 +747,16 @@ class WalletD:
                         signer_address: str,
                         ots_index: int):
         self.authenticate()
-        index, xmss = self._get_wallet_index_xmss(signer_address, ots_index)
-        self.verify_ots(signer_address, xmss, user_ots_index=ots_index)
+        index, falcon_data = self._get_wallet_index_falcon(signer_address)
+        self.verify_ots(signer_address, falcon_data, user_ots_index=ots_index)
 
         tx = SlaveTransaction.create(slave_pks=slave_pks,
                                      access_types=access_types,
                                      fee=fee,
-                                     xmss_pk=xmss.pk,
+                                     xmss_pk=falcon_data['public_key'],
                                      master_addr=self.qaddress_to_address(master_qaddress))
 
-        self.sign_and_push_transaction(tx, xmss, index)
+        self.sign_and_push_transaction(tx, falcon_data, index)
 
         return self.to_plain_transaction(tx.pbdata)
 
@@ -841,17 +766,17 @@ class WalletD:
                                  fee: int,
                                  master_qaddress):
         self.authenticate()
-        index, group_index, slave_index, slave_xmss = self.get_slave_xmss(master_qaddress)
+        index, group_index, slave_index, slave_falcon = self.get_slave_xmss(master_qaddress)
         if slave_index == -1:
             raise Exception("No Slave Found")
 
         tx = SlaveTransaction.create(slave_pks=slave_pks,
                                      access_types=access_types,
                                      fee=fee,
-                                     xmss_pk=slave_xmss.pk,
+                                     xmss_pk=slave_falcon['public_key'],
                                      master_addr=self.qaddress_to_address(master_qaddress))
 
-        self.sign_and_push_transaction(tx, slave_xmss, index, group_index, slave_index)
+        self.sign_and_push_transaction(tx, slave_falcon, index, group_index, slave_index)
 
         return self.to_plain_transaction(tx.pbdata)
 
